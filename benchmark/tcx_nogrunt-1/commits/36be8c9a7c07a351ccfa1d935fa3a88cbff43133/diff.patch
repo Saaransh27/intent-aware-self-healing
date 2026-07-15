@@ -1,0 +1,114 @@
+diff --git a/impact_lens/impactlens_server.py b/impact_lens/impactlens_server.py
+index b8a1ad3..5d16478 100644
+--- a/impact_lens/impactlens_server.py
++++ b/impact_lens/impactlens_server.py
+@@ -60,7 +60,7 @@ from analyzecode.router import router as analyzecode_router
+ # step visualizer imports
+ from step_visualizer.router import router as step_visualizer_router
+ from step_visualizer.mapping_pipeline.database import init_db as mapping_pipeline_init_db
+-from step_visualizer.mapping_pipeline.step_deduplicator import extract_triples_for_steps, explode_steps, explode_steps_grouped
++from step_visualizer.mapping_pipeline.step_deduplicator import extract_triples_for_steps
+ 
+ # failure analysis imports
+ from failureanalysis.router import router as failureanalysis_router
+@@ -3457,42 +3457,3 @@ def download_excel(task_id: str, file_type: str):
+     )
+ 
+ 
+-###########################################################
+-################# Step Explosion Endpoint #################
+-###########################################################
+-
+-class ExplodeStepsRequest(BaseModel):
+-    steps: List[str]
+-
+-class ExplodeStepResult(BaseModel):
+-    original: str
+-    exploded: List[str]
+-    triples_per_step: List[List[Any]]  # one triples list per sub-step
+-
+-class ExplodeStepsResponse(BaseModel):
+-    results: List[ExplodeStepResult]
+-
+-@app.post("/api/v1/steps/explode", response_model=ExplodeStepsResponse)
+-async def explode_steps_endpoint(req: ExplodeStepsRequest):
+-    """
+-    Takes a list of step strings. Returns per-step results: for each input step,
+-    the list of output steps (length 1 if no explosion, length N if exploded),
+-    plus the triples for each sub-step.
+-    Called by the Spring Boot StepExplosionService after test cases are saved.
+-    """
+-    if not req.steps:
+-        return ExplodeStepsResponse(results=[])
+-    try:
+-        enriched = await extract_triples_for_steps(req.steps)
+-        groups = await explode_steps_grouped(enriched)
+-        results = [
+-            ExplodeStepResult(
+-                original=req.steps[i],
+-                exploded=[s["step"] for s in groups[i]],
+-                triples_per_step=[s.get("triples", []) for s in groups[i]]
+-            )
+-            for i in range(len(req.steps))
+-        ]
+-        return ExplodeStepsResponse(results=results)
+-    except Exception as e:
+-        raise HTTPException(status_code=500, detail=f"Step explosion failed: {e}")
+diff --git a/impact_lens/step_visualizer/router.py b/impact_lens/step_visualizer/router.py
+index ee28716..e4ca49f 100644
+--- a/impact_lens/step_visualizer/router.py
++++ b/impact_lens/step_visualizer/router.py
+@@ -15,7 +15,7 @@ from .mapping_pipeline.element_index import build_element_index
+ from .mapping_pipeline.io_utils import load_elements, normalize_elements, enrich_steps
+ from .mapping_pipeline.llm_config import OLLAMA_MODEL, OLLAMA_URL, OLLAMA_TIMEOUT_ENRICHMENT
+ from .mapping_pipeline.pipeline import map_test_case_steps
+-from .mapping_pipeline.step_deduplicator import find_duplicate_groups
++from .mapping_pipeline.step_deduplicator import find_duplicate_groups, extract_triples_for_steps, explode_steps_grouped
+ 
+ from .deduplicate import deduplicate, effective_name
+ 
+@@ -1504,3 +1504,44 @@ def get_index_status(index_id: str):
+         raise HTTPException(status_code=404, detail=f"Index '{index_id}' not found")
+ 
+     return JSONResponse(content={"index_id": index_id, **meta})
++
++
++###########################################################
++################# Step Explosion Endpoint #################
++###########################################################
++
++class ExplodeStepsRequest(BaseModel):
++    steps: List[str]
++
++class ExplodeStepResult(BaseModel):
++    original: str
++    exploded: List[str]
++    triples_per_step: List[List[Any]]
++
++class ExplodeStepsResponse(BaseModel):
++    results: List[ExplodeStepResult]
++
++@router.post("/api/v1/steps/explode", response_model=ExplodeStepsResponse)
++async def explode_steps_endpoint(req: ExplodeStepsRequest):
++    """
++    Takes a list of step strings. Returns per-step results: for each input step,
++    the list of output steps (length 1 if no explosion, length N if exploded),
++    plus the triples for each sub-step.
++    Called by the Spring Boot StepExplosionService after test cases are saved.
++    """
++    if not req.steps:
++        return ExplodeStepsResponse(results=[])
++    try:
++        enriched = await extract_triples_for_steps(req.steps)
++        groups = await explode_steps_grouped(enriched)
++        results = [
++            ExplodeStepResult(
++                original=req.steps[i],
++                exploded=[s["step"] for s in groups[i]],
++                triples_per_step=[s.get("triples", []) for s in groups[i]]
++            )
++            for i in range(len(req.steps))
++        ]
++        return ExplodeStepsResponse(results=results)
++    except Exception as e:
++        raise HTTPException(status_code=500, detail=f"Step explosion failed: {e}")

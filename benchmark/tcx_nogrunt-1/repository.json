@@ -1,0 +1,102 @@
+{
+  "repository_url": "https://github.com/Nogrunt-Collaborations-Private-limited/tcx_nogrunt-1",
+  "default_branch": "main",
+  "commit_count": 352,
+  "first_commit_date": "2025-07-31T17:04:22+05:30",
+  "last_commit_date": "2026-07-08T09:30:58+05:30",
+  "contributors": [
+    {
+      "name": "kumarcrk",
+      "email": "kumar_crk@hotmail.com",
+      "commit_count": 186
+    },
+    {
+      "name": "kumarcrk",
+      "email": "66456145+kumarcrk@users.noreply.github.com",
+      "commit_count": 42
+    },
+    {
+      "name": "Saaransh27",
+      "email": "saaranshjain2709@gmail.com",
+      "commit_count": 27
+    },
+    {
+      "name": "Anurag Gurumurthy",
+      "email": "54735168+anuraggurumurthy@users.noreply.github.com",
+      "commit_count": 19
+    },
+    {
+      "name": "bhaveshQX",
+      "email": "bhavesh.jadhav@qualitrix.com",
+      "commit_count": 18
+    },
+    {
+      "name": "boothana",
+      "email": "59305671+boothana@users.noreply.github.com",
+      "commit_count": 16
+    },
+    {
+      "name": "firdous-wani",
+      "email": "azharwani7081@gmail.com",
+      "commit_count": 14
+    },
+    {
+      "name": "Saaransh27",
+      "email": "133195191+Saaransh27@users.noreply.github.com",
+      "commit_count": 10
+    },
+    {
+      "name": "boothana",
+      "email": "boothana@yahoo.com",
+      "commit_count": 9
+    },
+    {
+      "name": "Firdous Ahmad Wani",
+      "email": "149361552+firdous-wani@users.noreply.github.com",
+      "commit_count": 7
+    },
+    {
+      "name": "Anurag G",
+      "email": "anuraganu009@gmail.com",
+      "commit_count": 3
+    },
+    {
+      "name": "Firdous",
+      "email": "fwani@nogrunt.ai",
+      "commit_count": 1
+    }
+  ],
+  "primary_language": "Python",
+  "detected_languages": [
+    "Python",
+    "HTML",
+    "JSON",
+    "YAML",
+    "Markdown"
+  ],
+  "package_manager": "Pip",
+  "build_system": null,
+  "directories": {
+    "source": [
+      "impact_lens/",
+      "release notes/",
+      "similar_step/"
+    ],
+    "tests": [],
+    "documentation": [],
+    "examples": [],
+    "scripts": []
+  },
+  "repository_signals": {
+    "documentation": [
+      "README.txt"
+    ],
+    "build": [
+      "requirements.txt"
+    ],
+    "containerization": [],
+    "ci": [
+      ".github/workflows/"
+    ]
+  }
+}

@@ -1,0 +1,149 @@
+{
+  "repository_url": "https://github.com/fastapi/fastapi",
+  "default_branch": "master",
+  "commit_count": 7513,
+  "first_commit_date": "2018-12-05T10:56:50+04:00",
+  "last_commit_date": "2026-07-15T08:21:27Z",
+  "contributors": [
+    {
+      "name": "github-actions",
+      "email": "github-actions@github.com",
+      "commit_count": 2237
+    },
+    {
+      "name": "Sebasti\u00e1n Ram\u00edrez",
+      "email": "tiangolo@gmail.com",
+      "commit_count": 2200
+    },
+    {
+      "name": "github-actions[bot]",
+      "email": "github-actions[bot]@users.noreply.github.com",
+      "commit_count": 742
+    },
+    {
+      "name": "dependabot[bot]",
+      "email": "49699333+dependabot[bot]@users.noreply.github.com",
+      "commit_count": 226
+    },
+    {
+      "name": "Nils Lindemann",
+      "email": "nilslindemann@tutanota.com",
+      "commit_count": 131
+    },
+    {
+      "name": "Motov Yurii",
+      "email": "109919500+YuriiMotov@users.noreply.github.com",
+      "commit_count": 93
+    },
+    {
+      "name": "Alejandra",
+      "email": "90076947+alejsdev@users.noreply.github.com",
+      "commit_count": 60
+    },
+    {
+      "name": "pre-commit-ci[bot]",
+      "email": "66853113+pre-commit-ci[bot]@users.noreply.github.com",
+      "commit_count": 50
+    },
+    {
+      "name": "jaystone776",
+      "email": "jilei776@gmail.com",
+      "commit_count": 38
+    },
+    {
+      "name": "Valentyn",
+      "email": "valentin.druzhinin@gmail.com",
+      "commit_count": 33
+    },
+    {
+      "name": "Rafael de Oliveira Marques",
+      "email": "rafaelomarques@gmail.com",
+      "commit_count": 31
+    },
+    {
+      "name": "github-actions[bot]",
+      "email": "41898282+github-actions[bot]@users.noreply.github.com",
+      "commit_count": 26
+    },
+    {
+      "name": "Marcelo Trylesinski",
+      "email": "marcelotryle@gmail.com",
+      "commit_count": 25
+    },
+    {
+      "name": "Sofie Van Landeghem",
+      "email": "svlandeg@users.noreply.github.com",
+      "commit_count": 24
+    },
+    {
+      "name": "Hasan Sezer Ta\u015fan",
+      "email": "13135006+hasansezertasan@users.noreply.github.com",
+      "commit_count": 23
+    },
+    {
+      "name": "SwftAlpc",
+      "email": "alpaca.swift@gmail.com",
+      "commit_count": 23
+    },
+    {
+      "name": "T. Tokusumi",
+      "email": "41147016+tokusumi@users.noreply.github.com",
+      "commit_count": 22
+    },
+    {
+      "name": "Yurii Motov",
+      "email": "109919500+YuriiMotov@users.noreply.github.com",
+      "commit_count": 17
+    },
+    {
+      "name": "Xie Wei",
+      "email": "39515546+waynerv@users.noreply.github.com",
+      "commit_count": 16
+    },
+    {
+      "name": "Aleksandr Andrukhov",
+      "email": "drammtv@gmail.com",
+      "commit_count": 15
+    }
+  ],
+  "primary_language": "Markdown",
+  "detected_languages": [
+    "Markdown",
+    "Python",
+    "YAML",
+    "Shell",
+    "JavaScript",
+    "HTML",
+    "CSS"
+  ],
+  "package_manager": "PDM",
+  "build_system": null,
+  "directories": {
+    "source": [
+      "docs_src/",
+      "fastapi/"
+    ],
+    "tests": [
+      "tests/"
+    ],
+    "documentation": [
+      "docs/"
+    ],
+    "examples": [],
+    "scripts": [
+      "scripts/"
+    ]
+  },
+  "repository_signals": {
+    "documentation": [
+      "README.md"
+    ],
+    "build": [
+      "pyproject.toml"
+    ],
+    "containerization": [],
+    "ci": [
+      ".github/workflows/"
+    ]
+  }
+}

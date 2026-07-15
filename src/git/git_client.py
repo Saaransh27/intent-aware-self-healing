@@ -84,3 +84,64 @@ class GitClient:
 
     def checkout_commit(self, repo_path, commit_hash):
         self.run_git_command(["checkout", commit_hash], cwd=repo_path)
+
+    def get_default_branch(self, repo_path):
+        return self.run_git_command(["rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_path).strip()
+
+    def get_commit_count(self, repo_path):
+        return int(self.run_git_command(["rev-list", "--count", "HEAD"], cwd=repo_path).strip())
+
+    def get_first_commit_date(self, repo_path):
+        output = self.run_git_command(
+            ["log", "--reverse", "--format=%ad", "--date=iso-strict"], cwd=repo_path
+        )
+        return output.splitlines()[0]
+
+    def get_last_commit_date(self, repo_path):
+        return self.run_git_command(
+            ["log", "-1", "--format=%ad", "--date=iso-strict"], cwd=repo_path
+        ).strip()
+
+    def get_contributors(self, repo_path, max_count=None):
+        output = self.run_git_command(["shortlog", "-sne", "HEAD"], cwd=repo_path)
+        contributors = []
+        for line in output.splitlines():
+            count_str, rest = line.split("\t", 1)
+            name, email = rest.rsplit(" <", 1)
+            contributors.append({
+                "name": name,
+                "email": email.rstrip(">"),
+                "commit_count": int(count_str.strip()),
+            })
+        return contributors[:max_count]
+
+    def get_tracked_files(self, repo_path, commit_hash=None):
+        if commit_hash:
+            output = self.run_git_command(["ls-tree", "-r", "--name-only", commit_hash], cwd=repo_path)
+        else:
+            output = self.run_git_command(["ls-files"], cwd=repo_path)
+        return output.splitlines()
+
+    def get_file_history(self, repo_path, commit_hash, file_path):
+        output = self.run_git_command(
+            ["log", commit_hash, "--format=%ad", "--date=iso-strict", "--", file_path],
+            cwd=repo_path,
+        )
+        dates = output.splitlines()
+        return {
+            "total_commit_count": len(dates),
+            "first_commit_date": dates[-1] if dates else None,
+            "previous_commit_date": dates[1] if len(dates) > 1 else None,
+            "is_first_appearance": len(dates) <= 1,
+        }
+
+    def get_co_change_history(self, repo_path, commit_hash, file_path, max_history=50):
+        output = self.run_git_command(
+            ["log", commit_hash, f"--max-count={max_history + 1}", "--format=%H", "--", file_path],
+            cwd=repo_path,
+        )
+        historical_hashes = output.splitlines()[1:]
+        return [
+            [entry["path"] for entry in self.get_changed_files(repo_path, historical_hash)]
+            for historical_hash in historical_hashes
+        ]
