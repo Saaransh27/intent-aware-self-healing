@@ -160,3 +160,198 @@ Revisit When:
 If another `GitClient` method is added that lists something tree-wide (not commit- or
 path-specific) — check up front whether it needs the same optional `commit_hash` scoping
 rather than discovering the gap through a real bug again.
+
+---
+
+ADR-005
+
+Title:
+Milestone 6 adds a symbol-level semantic evidence layer, with its first implementation
+targeting Python at `src/semantic/python/symbol_extractor.py`, architecturally parallel
+to — not a replacement for — Milestone 5A's structural/historical context layer.
+
+Status:
+Accepted
+
+Context:
+The 20-commit evaluation (docs/research/observations.md) and the follow-up first-
+principles critique both converged on the same conclusion: the git-only evidence layer
+has a real ceiling, and the highest-value gap is code semantics — what actually changed
+inside a file, not just which file changed and how often. Commit 4 (fastapi) was the
+concrete case: a 300-line refactor and a two-line typo fix produced structurally similar
+evidence because nothing in the pipeline looks inside a file's contents. This ADR
+freezes the design for closing that specific gap, scoped deliberately narrowly: symbol-
+level facts only, Python only, no reasoning.
+
+Decision:
+
+Guiding principle for every stage below: prefer emitting fewer facts with high
+confidence over more facts with uncertain interpretation. Where a case is genuinely
+ambiguous (e.g. a redefinition pattern the symbol table can't cleanly resolve), the
+correct behavior is to omit or flag it, never to guess.
+
+Module structure:
+- New top-level package `src/semantic/`, sibling to `src/utils/` and `src/git/`, not
+  folded into `src/utils/`. Everything under `utils/` today is structural/historical and
+  language-agnostic; this layer is symbolic and language-coupled. Keeping them visually
+  separate is a permanent signal to future readers, not cosmetic.
+- Within it, a language-named subpackage: `src/semantic/python/symbol_extractor.py`, not
+  a bare `symbol_extractor.py` at the `semantic/` root. Language-specific extraction is
+  not a detail to bolt on later — it's the actual shape of the problem, so the directory
+  structure says so now. A second language gets a sibling package
+  (`src/semantic/javascript/`, etc.) with no rename of existing code required.
+- Single file within `python/` for now, mirroring every existing detector: one file, one
+  public entry point, private helpers underneath. No further splitting yet — the scope
+  (8 questions, Python only) does not justify it.
+
+Responsibilities:
+- `symbol_extractor.py` owns exactly one thing: given two source strings (or `None`),
+  produce symbol- and import-level facts. It knows nothing about Git, commits, or file
+  paths beyond the one path string it's told (used only for the `file_path` field in its
+  output, never to read a file itself).
+- `DatasetCollector` gains one new orchestration method,
+  `_build_commit_semantic_analysis(repo_path, commit_hash, change_set)`. It decides which
+  changed files are in scope (`.py` only), fetches old/new source via
+  `GitClient.get_file_content_at_commit`, and calls the extractor once per file. It
+  contains no AST logic, exactly like every other `_build_commit_*` method contains no
+  git logic.
+- `GitClient` is untouched. `get_file_content_at_commit(repo_path, commit_hash,
+  file_path)` already fetches a file at any commit; calling it once with the commit's
+  single parent hash and once with the commit hash itself is sufficient. No new method
+  is needed — a good sign the Milestone 4A/5A abstraction boundary was drawn correctly.
+
+Data flow (per commit, per changed file):
+1. `_build_commit_semantic_analysis` reads `change_set`'s `added_files`, `deleted_files`,
+   `modified_files`, `renamed_files` and filters to files where the relevant path (new
+   path for added/modified, old path for deleted, either path for renamed) ends in
+   `.py`. Non-Python changed files are simply not included in this section's output —
+   there is no other evidence section they'd need to also appear in.
+2. For each in-scope file, resolve `old_source`/`new_source`:
+   - added: `old_source = None`, `new_source` fetched at `commit_hash`.
+   - deleted: `old_source` fetched at the parent hash, `new_source = None`.
+   - modified: both fetched, same path.
+   - renamed: `old_source` fetched at the parent hash using `old_path`, `new_source`
+     fetched at `commit_hash` using `path`. This is a plain content diff across the two
+     known paths, not symbol-rename tracking — the file's identity is already resolved
+     by Git; the extractor just needs the right two strings.
+   - The parent hash is read once via `GitClient.get_parent_hashes(repo_path,
+     commit_hash)[0]` — safe because `DatasetCollector` only ever processes non-merge
+     commits, which have exactly one parent.
+3. `extract_symbol_semantics(old_source, new_source, file_path)` parses whichever
+   sources are present into an AST each, builds a symbol table per source keyed by
+   qualified name, diffs the two tables, and diffs the modules' import statements.
+4. Results are collected into a single `semantic_analysis` block for the commit.
+
+Output schema (new top-level section in `commit.json`, alongside `context`):
+
+    "semantic_analysis": {
+      "files": [
+        {
+          "file_path": "src/foo.py",
+          "old_path": null,
+          "change_type": "added" | "deleted" | "modified" | "renamed",
+          "parseable": true,
+          "imports": { "added": ["os.path"], "removed": ["sys"] },
+          "symbols": [
+            {
+              "qualified_name": "Foo.bar",
+              "symbol_type": "function" | "async_function" | "method" |
+                              "async_method" | "class",
+              "change_type": "added" | "removed" | "modified",
+              "enclosing_scope": "Foo",
+              "visibility": "public" | "private",
+              "signature_changed": true,
+              "signature": { "old": "(self, x)", "new": "(self, x, y=None)" },
+              "decorators_changed": false,
+              "decorators": { "added": [], "removed": [] },
+              "docstring_status": "added" | "removed" | "changed" | "unchanged"
+            }
+          ]
+        }
+      ]
+    }
+
+`old_path` is non-null only for renamed files. When `parseable` is `false` (a syntax
+error at either revision), `imports` and `symbols` are both `null` — the same honest-
+failure shape `extraction_confidence` already established elsewhere; this section never
+fabricates partial results for a file it couldn't fully parse. `semantic_analysis` is
+wrapped in a `{"files": [...]}` object rather than a bare list so a future summary field
+can be added without changing the section's shape.
+
+Interfaces:
+- Public: `extract_symbol_semantics(old_source: str | None, new_source: str | None,
+  file_path: str) -> dict`, in `src/semantic/python/symbol_extractor.py`. Pure function, no I/O.
+- Symbol identity across the diff is the **qualified name**: dotted path from module
+  root through enclosing class to the symbol (`Foo.bar` for a method, `baz` for a
+  top-level function). This is the only identity scheme used — deterministic from AST
+  structure alone, no similarity heuristics.
+- `DatasetCollector._build_commit_semantic_analysis(self, repo_path, commit_hash,
+  change_set) -> dict`, following the exact calling convention of every existing
+  `_build_commit_*` method.
+
+Limitations (decided, not open):
+- Python only. Any other changed file is absent from this section, full stop — no
+  language-agnostic fallback is attempted, because a shallow one would reintroduce the
+  imprecision this layer exists to remove.
+- No symbol rename detection. A function renamed `foo` -> `bar` within an unrenamed file
+  reports as "removed foo" + "added bar." Solving this would require similarity
+  heuristics, which this project has avoided everywhere else; not revisited here.
+- No cross-file reference resolution, no call graph, no impact analysis. A
+  `signature_changed: true` fact describes the symbol itself only — never who calls it.
+  That is explicitly reserved for a future, separate concern, if ever built at all.
+- No cross-commit symbol history. Scope is strictly this commit's before/after diff,
+  matching `change_set`'s own single-commit scoping.
+- No `__all__` awareness. Visibility is leading-underscore convention only.
+- No type-compatibility judgment. `signature_changed` and the raw old/new signature text
+  are facts; whether a change is compatible is reasoning, out of scope by the milestone's
+  own charter.
+
+Rationale:
+- A new package rather than reusing `utils/` makes the language-coupling trade-off
+  visible in the directory structure itself, not just in a doc — the one place this
+  project's language-agnostic property is deliberately given up.
+- Reusing `GitClient.get_file_content_at_commit` unmodified is a direct validation that
+  ADR-001/ADR-004's abstraction boundary (all git mechanics behind GitClient, called with
+  explicit commit scoping) generalizes to a new kind of consumer without changes.
+- Qualified-name identity was chosen over line-position or hash-based identity because
+  it survives surrounding-code reordering and is the same notion of "identity" a reader
+  already uses when they say "the `bar` method changed" — no invented concept.
+- Renamed files are handled as a content diff across two known paths, not as remove+add
+  of every symbol, because Git already resolved the file's identity; discarding that and
+  treating a rename as a full delete-then-create would manufacture false churn in the
+  evidence for the common case of a file move with a small in-place edit.
+
+Trade-offs:
+- This is the first evidence extractor whose coverage depends on the target repository's
+  language mix — a Rust or Java-heavy repo gets an empty `semantic_analysis` section, which
+  is honest but is a real, permanent asymmetry against every other section in
+  `commit.json`.
+- Symbol-table diffing by qualified name will misattribute changes in the (rare)
+  legitimate case of same-named symbols redefined conditionally in the same scope (e.g.
+  a function defined differently per `if`/`else` branch at module level). Left
+  unhandled; flagged here rather than silently accepted.
+
+Implementation stages (built one at a time, gated by explicit confirmation before each):
+1. AST + Symbol Extraction: parse one source string into an AST, then walk it into a
+   qualified-name-keyed symbol table of functions/async functions/methods/classes,
+   capturing signature text, decorators, docstring, enclosing scope, and visibility. No
+   diffing yet.
+2. Semantic Diff: compare two symbol tables, classify added/removed/modified, and for
+   matched symbols compute `signature_changed`, `decorators_changed`, `docstring_status`.
+3. Import Analysis: added/removed import statements between two sources.
+4. Public Semantic Extractor API: `extract_symbol_semantics` assembles stages 1-3 behind
+   one public interface, plus the `parseable: false` degradation path for syntax errors.
+5. DatasetCollector Integration: `_build_commit_semantic_analysis` — file-scope filtering
+   from `change_set`, source-fetching via `GitClient`, calling the extractor, assembling
+   the `semantic_analysis` block.
+6. Real-World Validation: against real commits (including at least one non-trivial
+   rename and one syntax-error/degradation case), followed by module doc,
+   `ARCHITECTURE.md`, `MILESTONES.md`, and `CHANGELOG.md` updates.
+
+Revisit When:
+If a second language is added, it gets its own sibling package under `src/semantic/`
+(e.g. `src/semantic/javascript/`), feeding the same `semantic_analysis` output shape —
+that structural decision is already made by this ADR. What remains open at that point is
+narrower: whether per-language results are merged into one `files` list or kept in
+per-language sections, decided against real cross-language repository data when it
+exists, not speculatively now.

@@ -1,6 +1,6 @@
 # Current State
 
-_Last synced: 2026-07-15._
+_Last synced: 2026-07-21._
 
 ## What works
 
@@ -52,6 +52,43 @@ since been removed from HEAD.
 The sixth section, `collection`, hasn't been specified either. Per `PROJECT.md` rule 4,
 do not treat any of this as complete until it is.
 
+A 20-commit qualitative evaluation of these four extractors plus `observations`
+(2026-07-16) rated the pipeline's evidence sufficiency at 6.4/10 average across 4
+repositories — see `docs/research/experiments.md`/`observations.md`. Findings-only; no
+pipeline code changed as a result.
+
+## In progress — Milestone 6 (symbol-level semantic evidence)
+
+Architecture frozen as ADR-005 (2026-07-20): a new, independent, Python-only evidence
+extractor answering what the 20-commit evaluation identified as the highest-value
+remaining gap — code semantics, not more git-derived statistics. New package
+`src/semantic/python/`, output destined for a new `commit.json` section,
+`semantic_analysis`, alongside `context`.
+
+All 6 stages are built and verified: `src/semantic/python/symbol_extractor.py` parses
+Python source into a symbol table, diffs old/new tables and imports, and exposes one
+public function, `extract_symbol_semantics`. `DatasetCollector.
+_build_commit_semantic_analysis(repo_path, commit_hash, change_set)` calls it per
+changed Python file and resolves renames (git identity the extractor itself can't see).
+
+Verified against real commits in `pallets/flask` (`06ea505c` — non-Python files
+excluded, a logic-only edit correctly produced zero symbol entries, a real test-file
+rewrite produced both added and removed symbols including a four-level-deep nested
+function) and `tcx_nogrunt-1` (`d99f6cb` — a real, content-changing rename of a FastAPI
+`app` into an `APIRouter`; all 15 functions correctly matched across the rename as
+`modified` with `decorators_changed: true`, not misreported as 15 removed + 15 added).
+Searched three real repos for a naturally-occurring unparseable Python file and found
+none; the `parseable: false` path is verified via hand-constructed cases only (Stages
+1/4), same precedent as `_build_commit_change_set`'s rename branch in Milestone 4A. See
+`docs/modules/symbol_extractor.md`, `docs/modules/dataset_collector.md`, and
+`docs/MILESTONES.md` for full detail.
+
+**Nothing from Milestone 6 is wired into `collect()` yet.** No `semantic_analysis`
+section has ever been written to an actual `commit.json` (which itself still doesn't
+exist). Per `PROJECT.md` rule 4, extraction being finished does not imply the milestone
+is complete — assembly is a distinct next step, same distinction already drawn for
+Milestone 5A.
+
 ## What exists
 
 - `src/git/git_client.py` — `GitClient`, full git-plumbing layer. See
@@ -76,6 +113,8 @@ do not treat any of this as complete until it is.
   `docs/modules/co_change_detector.md`.
 - `src/utils/module_context_detector.py` — `get_local_module_files(...)`, a file's
   siblings in its own immediate directory. See `docs/modules/module_context_detector.md`.
+- `src/semantic/python/symbol_extractor.py` — `_build_symbol_table(source)` (private,
+  Stage 1 of 6; no public function yet). See `docs/modules/symbol_extractor.md`.
 - `requirements.txt` — present, empty. No third-party dependencies; everything used so
   far is Python stdlib plus the `git` binary.
 

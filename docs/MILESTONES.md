@@ -314,3 +314,154 @@ now takes `max_results=20`. Both are explicit stopgaps, not final designs — th
 flagged both need a proper look later (e.g. ranking by relevance instead of truncating
 alphabetically). `primary_language`'s file-count ranking issue was not fixed — no
 decision made yet on the right approach.
+
+**20-commit qualitative evaluation (2026-07-16):** ran the full evidence pipeline against
+20 real commits across 4 repositories (`fastapi/fastapi`, `pallets/flask`,
+`tcx_nogrunt-1`, and a local personal repo, `~/Projects/Triple`, found on this device —
+deliberately messy, with `.DS_Store`/`.pyc` committed and vague "initial"-style
+messages), and evaluated each against a structured template judging whether the evidence
+alone (not code correctness) is sufficient for an engineer or LLM to understand the
+commit and reason about impact. Full write-up: `docs/research/experiments.md` (per-commit)
+and `docs/research/observations.md` (cross-commit synthesis).
+
+Average rated usefulness: **6.4/10** across 20 commits (range 4-9). Key findings:
+`change_set`, `co_change` (when real history exists), and `observations` consistently
+rated highest; `local_module_context` rated lowest in every commit it appeared in — the
+20-commit sample confirms with real data what the single-commit efficiency review
+already suspected. Two *new* findings only visible by comparing across commits: wide
+homogeneous commits (Commits 6, 17) produce heavily repetitive per-file evidence blocks
+that could be summarized once instead; and a `.txt`/`.lock`-style dependency-file gap in
+`file_classifier` recurred independently in two unrelated repos. One unexpected discovery:
+two consecutive real commits in `tcx_nogrunt-1` (13, 14) fixed the identical escaping bug
+in near-identical sibling files one commit apart — concrete evidence (not hypothetical)
+that the duplication/similarity relationship flagged and shelved during the earlier
+research phase would have had real value here.
+
+Nothing was changed in the pipeline as a result of this evaluation — it's a findings
+document, prioritization/implementation is a separate future decision.
+
+## Milestone 6 — Symbol-Level Semantic Evidence
+
+**Status: In progress** — architecture frozen as ADR-005 (2026-07-20), all 6 stages
+complete (2026-07-21); not "complete" per `PROJECT.md` rule 4 (see below)
+
+Motivation: the 20-commit evaluation above and a follow-up first-principles critique
+(conversational, not written to a doc) both converged on the same conclusion — the
+git-only evidence layer has a real ceiling, and the highest-value remaining gap is code
+semantics, not more git-derived statistics. `fastapi`'s Commit 4 (see
+`docs/research/experiments.md`) was the concrete case: a 300-line refactor and a
+two-line typo fix produced structurally similar evidence, because nothing in the
+pipeline looks inside a file's contents.
+
+Architecture (ADR-005, `docs/DECISIONS.md`; amended the same day, before any code was
+written, to remove Python from the module path/section name/stage naming): a new,
+independent evidence extractor, deterministic and Python-only for now, architecturally
+parallel to — not a replacement for — Milestone 5A's `context`. New package
+`src/semantic/python/`, sibling to `src/utils/` and `src/git/`, deliberately separated
+so the layer's language coupling is visible in the directory structure rather than
+hidden in a doc. Output is destined for a new `commit.json` section,
+`semantic_analysis`, alongside `context`. Six stages, built and confirmed one at a
+time; guiding principle stated in the ADR: prefer fewer high-confidence facts over more
+facts with uncertain interpretation — ambiguous cases are omitted or flagged, never
+guessed. No reasoning, scoring, or impact prediction at any stage.
+
+- [x] **Stage 1 — AST + Symbol Extraction.** `src/semantic/python/symbol_extractor.py`:
+      `_build_symbol_table(source)` parses one source string into an AST and walks it
+      into a qualified-name-keyed table (`Foo.bar`, `Foo.bar.helper`) capturing
+      `symbol_type` (function/async_function/method/async_method/class),
+      `enclosing_scope`, `visibility`, `signature` (via `ast.unparse`), `decorators`,
+      `docstring`. Recursion is generic over `ast.iter_child_nodes`, so symbols nested
+      inside `if`/`try`/`for`/`with` blocks are still found, not silently missed. See
+      `docs/modules/symbol_extractor.md`.
+
+      Verified directly, not assumed: module docstrings correctly excluded (not a
+      tracked symbol type); dunder methods (`__init__`) correctly classified `public`,
+      not `private`, despite the leading-underscore rule; a function nested inside a
+      method gets the correct dotted qualified name (`Foo.bar.helper`) and is
+      classified `function`, not `method` (its immediate parent is a function, not a
+      class); positional-only/keyword-only markers (`a, b, /, c, *, d`) unparse
+      cleanly; a genuine `SyntaxError` propagates rather than being swallowed
+      (`parseable` handling is deliberately deferred to Stage 4); an `if`/`else` and a
+      `try`/`except` each conditionally redefining a same-named function both collapse
+      to one table entry (last-write-wins) — the exact "conditionally redefined
+      symbol" edge case ADR-005 flagged as a known, accepted trade-off, now
+      demonstrated with real input rather than only discussed.
+- [x] **Stage 2 — Semantic Diff.** `_diff_symbol_tables(old_table, new_table)`
+      compares two tables by qualified name, emitting only symbols that are
+      `added`/`removed`/genuinely `modified` — a symbol identical on both sides is
+      omitted, matching `change_set`'s own discipline. Verified: signature and
+      decorator changes detected correctly (decorator swap reported as one added + one
+      removed, not a wholesale replace), docstring transitions correct in both
+      directions (`added`/`removed`), a genuinely untouched method produced no entry,
+      and diffing a table against itself produced zero diffs.
+- [x] **Stage 3 — Import Analysis.** `_diff_imports(old_source, new_source)` diffs at
+      per-imported-name granularity, not whole-statement text. Verified: reordering
+      names within one `from X import a, b` line produces no diff; genuine adds/removes
+      alongside a reorder are correctly isolated; relative imports and `as`-aliasing
+      handled; `None` on either side (added/deleted file) correctly treated as "no
+      imports."
+- [x] **Stage 4 — Public semantic extractor API.**
+      `extract_symbol_semantics(old_source, new_source, file_path)` assembles Stages
+      1-3 behind one call, inferring `change_type` (`added`/`deleted`/`modified`) from
+      which source is `None`, with an honest `parseable: false` degradation path
+      (`imports`/`symbols` both `null`) when either present source fails to parse.
+      Explicitly cannot detect renames — that requires git identity this function never
+      sees, and is deferred to Stage 5. Verified across every branch: added, deleted,
+      modified, unparseable old source, unparseable new source, and a true no-op diff
+      (identical source both sides → empty output).
+- [x] **Stage 5 — `DatasetCollector` integration.**
+      `_build_commit_semantic_analysis(repo_path, commit_hash, change_set)` filters
+      changed files to Python only, resolves old/new source via
+      `GitClient.get_file_content_at_commit` (parent hash for "old," `commit_hash` for
+      "new"), and delegates all AST work to `extract_symbol_semantics` — no extraction
+      logic of its own, same discipline as the four Milestone 5A extractors. It is the
+      one place that resolves renames: since the pure extractor has no git identity, this
+      method overwrites `change_type` to `"renamed"` and sets `old_path` itself after
+      calling the extractor with each side's correct source. Verified against a real
+      commit in `pallets/flask` (`06ea505c`) — see `docs/modules/dataset_collector.md`
+      for the full result, including a real four-level-deep nested function correctly
+      resolved, and a real "logic changed but no symbol-level fact changed" case that
+      honestly produced zero symbol entries rather than a false signal.
+- [x] **Stage 6 — Real-world validation.** Searched three real repositories
+      (`pallets/flask`, `fastapi/fastapi`, `tcx_nogrunt-1`) specifically for the two
+      hardest cases to construct synthetically: a non-trivial rename (content changed,
+      not just moved) and a naturally-occurring unparseable Python snapshot.
+
+      **Non-trivial rename — found and verified**, `tcx_nogrunt-1` commit `d99f6cb`
+      (`impact_lens/step_visualizer/backend/main.py` → `.../router.py`, git similarity
+      R084 — an 84% match, not a pure move). Correctly reported as `change_type:
+      "renamed"` with `old_path` set. This single commit is the clearest real evidence
+      the rename design (ADR-005) is correct: the file is a FastAPI `app` being
+      converted into an `APIRouter` — all 15 functions correctly show `change_type:
+      "modified"` with `signature_changed: false` and `decorators_changed: true`
+      (e.g. `get_page`'s decorator changed from `app.get(...)` to `router.get(...)`,
+      signature `filename: str` untouched) — exactly what a content-diff-across-paths
+      should produce. Treating this rename as delete-then-create (the alternative
+      ADR-005 explicitly rejected) would have wrongly reported 15 removed + 15 added
+      functions instead of 15 correctly-matched modifications. The same commit's ~30
+      other renamed files (mostly pure `R100` moves, one `.db` binary, one `.md`) were
+      also verified: non-Python renames correctly excluded from `semantic_analysis`
+      entirely; pure-content renames correctly produced empty symbol/import diffs.
+      This also incidentally exercised `_build_commit_change_set`'s rename branch
+      against real data for the first time — previously only synthetic-repo-tested.
+
+      **Naturally-occurring unparseable Python — searched for, not found.**
+      Programmatically checked every `.py` blob at every non-merge commit in
+      `tcx_nogrunt-1`'s full history (275 commits, 394 file-snapshots) and a 76-snapshot
+      sample of `pallets/flask`'s oldest commits (checking for Python-2-only syntax);
+      also searched all three repos' full history for committed merge-conflict markers
+      in `.py` files. Zero hits. This is itself a real, if modest, finding — broken
+      Python essentially doesn't survive into a maintained repository's merged history
+      — and it means the `parseable: false` path remains verified only via the
+      hand-constructed cases from Stages 1 and 4, the same precedent already set for
+      `_build_commit_change_set`'s rename branch back in Milestone 4A (built and tested
+      against a synthetic repo when no real commit happened to contain one).
+
+**Six of six stages complete. Still not "complete" per `PROJECT.md` rule 4** —
+`_build_commit_semantic_analysis` is verified standalone but `collect()` does not call
+it, and no `semantic_analysis` section has ever been written to an actual `commit.json`
+(which itself still doesn't exist — same status as `observations` and `context`).
+Assembly is a distinct next step, not implied by extraction being finished — the exact
+same distinction Milestone 5A drew after all four of its extractors were built. Only
+Python is supported, by design (ADR-005); any other language present in a repository is
+simply absent from this evidence category.

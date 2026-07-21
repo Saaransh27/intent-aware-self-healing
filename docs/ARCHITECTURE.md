@@ -1,6 +1,6 @@
 # Architecture
 
-## Current flow (Milestone 2 + Milestone 3 step 1 + Milestones 4A/4B/5A in progress)
+## Current flow (Milestone 2 + Milestone 3 step 1 + Milestones 4A/4B/5A/6 in progress)
 
 ```
 main.py <repository_url> <commit_count>
@@ -52,6 +52,18 @@ Three layers, one strict rule between them:
   `file_classifier.py` imports `language_detector.EXTENSION_LANGUAGES` to avoid
   duplicating the extension list — the first (and so far only) cross-import between two
   `src/utils` modules; still no dependency on git or `DatasetCollector`.
+- **`src/semantic/`** — a new layer added in Milestone 6 (ADR-005), sibling to
+  `src/utils/` and `src/git/`. Deliberately kept separate from `src/utils/`:
+  everything under `utils/` is structural/historical and language-agnostic, while this
+  layer extracts symbol-level facts directly from source code and is necessarily
+  language-coupled. Each language gets its own subpackage —
+  `src/semantic/python/symbol_extractor.py` is the first and, so far, only one. Its
+  public function, `extract_symbol_semantics`, is called from
+  `DatasetCollector._build_commit_semantic_analysis` — all 6 ADR-005 stages complete,
+  verified against real commits in `pallets/flask` and `tcx_nogrunt-1` (including a
+  non-trivial, content-changing rename), but not yet wired into `collect()`, same
+  status as every other evidence-extractor orchestration method. See
+  `docs/modules/symbol_extractor.md` and `MILESTONES.md` (Milestone 6).
 - **`DatasetCollector`** (`src/collector/`) — orchestration and I/O only. It asks
   `GitClient`/`src/utils` for things ("give me the tracked files," "classify these paths")
   and treats the answers as opaque values to persist. It owns the benchmark output layout

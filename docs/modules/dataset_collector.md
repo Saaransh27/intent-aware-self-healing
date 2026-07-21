@@ -69,6 +69,21 @@ metadata, from a given GitHub repository, on disk, in the layout the benchmark e
   (or, for repository signals, a direct pass-through) delegating to `GitClient`/`src/utils`
   — per the user's explicit architecture rule for these four extractors (independent,
   orchestrated not embedded, swappable without affecting the others).
+- **In progress (Milestone 6 — Symbol-Level Semantic Evidence, ADR-005):**
+  `_build_commit_semantic_analysis(repo_path, commit_hash, change_set)` — the fifth
+  evidence-extractor orchestration method, destined for a new `commit.json` section,
+  `semantic_analysis`, alongside `context`. Filters `change_set`'s added/deleted/
+  modified/renamed files to Python only (`Path(file_path).suffix.lower() == ".py"`),
+  resolves old/new source per file via `GitClient.get_file_content_at_commit` (parent
+  hash for "old," `commit_hash` for "new"; only whichever side actually exists for
+  added/deleted files), and delegates all AST work to
+  `src.semantic.python.symbol_extractor.extract_symbol_semantics` — this method
+  contains no AST logic itself, same discipline as the four Milestone 5A extractors.
+  Renames are the one case this method must resolve itself, deliberately: the pure
+  extractor has no access to git identity, so after calling it with `old_path`'s source
+  (at the parent commit) and the new path's source (at `commit_hash`), this method
+  overwrites the result's `change_type` to `"renamed"` and sets `old_path` — the only
+  place in the whole call chain that knows about the rename.
 
 ## Public API
 
@@ -89,11 +104,12 @@ context exit. Private helpers (`_repository_name`, `_fetch_repository_metadata`,
 `_save_metadata`, `_save_diff`) handle naming and I/O; none of them know anything about
 git themselves — they only call `GitClient` and persist what it returns.
 
-Separately, nine more private methods build the pieces of a future `commit.json` but
+Separately, ten more private methods build the pieces of a future `commit.json` but
 aren't called from `collect()` yet: `_build_commit_identity`, `_build_commit_metadata`,
 `_build_commit_change_set`, `_build_commit_observations`, `_build_commit_file_history`,
 `_build_commit_co_change`, `_build_commit_local_module_context`,
-`_build_commit_repository_signals`, `_build_commit_artifacts`. Each has been verified
+`_build_commit_repository_signals`, `_build_commit_semantic_analysis`,
+`_build_commit_artifacts`. Each has been verified
 standalone against real repos (including a synthetic repo built specifically to
 exercise the rename branch of `_build_commit_change_set`, since no real commit tested so
 far happened to contain one; multiple real commits from `tcx_nogrunt-1`'s actual history
@@ -126,6 +142,41 @@ periodically validating against a repository other than the ones already exercis
 repeatedly matters — this bug was invisible against `fastapi`/`tcx_nogrunt-1` because
 neither had a directory that later disappeared from HEAD.
 
+**`_build_commit_semantic_analysis` verified against a real commit in `pallets/flask`**
+(`06ea505c`, "separate copy per call" — chosen for a real multi-file, mixed-language
+mix: `pyproject.toml`/`uv.lock` alongside two `.py` files). Confirmed directly, not
+assumed: the two non-Python files were correctly excluded from the section entirely;
+`src/flask/ctx.py` (logic-only edit, no signature/decorator/docstring change) correctly
+produced zero symbol entries — an honest demonstration of this layer's real limit, not
+a bug, the same "can't see inside a function body" ceiling named in ADR-005;
+`tests/test_reqctx.py` (a real test-file rewrite) correctly produced both `removed` and
+`added` symbol entries, including a genuine four-level-deep nested function
+(`TestGreenletContextCopying.test_greenlet_context_copying.index.g`) with the correct
+dotted qualified name and correct decorator/signature facts.
+
+**Non-trivial rename validated against real data (`tcx_nogrunt-1`, commit `d99f6cb`,
+Stage 6):** `impact_lens/step_visualizer/backend/main.py` → `.../router.py`, git
+similarity R084 (84% match — real content change, not a pure move). A FastAPI `app`
+being converted into an `APIRouter`. All 15 functions correctly matched across the
+rename as `change_type: "modified"` with `signature_changed: false` and
+`decorators_changed: true` (e.g. `get_page`'s decorator changed from
+`app.get('/api/pages/{filename:path}')` to `router.get(...)`, its signature
+`filename: str` untouched) — direct evidence the content-diff-across-paths rename
+design is correct: treating this as delete-then-create (the alternative ADR-005
+rejected) would have wrongly reported 15 removed + 15 added functions instead of 15
+matched modifications. The same commit's ~30 other renamed files (mostly identical-
+content `R100` moves, one binary, one markdown file) confirmed non-Python renames are
+correctly excluded and pure-content renames correctly produce empty diffs. This also
+exercised `_build_commit_change_set`'s rename branch against real data for the first
+time (previously only synthetic-repo-tested, per Milestone 4A).
+
+Searched `pallets/flask`, `fastapi/fastapi`, and `tcx_nogrunt-1`'s full/sampled history
+for a naturally-occurring unparseable Python snapshot (every `.py` blob at every
+non-merge commit in `tcx_nogrunt-1`, 394 snapshots; a sample of `flask`'s oldest
+commits; a search across all three for committed merge-conflict markers). None found —
+`_build_commit_semantic_analysis`'s degradation path is verified via hand-constructed
+cases only (see `docs/modules/symbol_extractor.md`).
+
 ## Dependencies
 
 `GitClient` (`src/git/git_client.py`), `detect_languages` (`src/utils/language_detector.py`),
@@ -134,7 +185,8 @@ neither had a directory that later disappeared from HEAD.
 (`src/utils/signal_detector.py`), `classify_file`/`is_build_file`
 (`src/utils/file_classifier.py`), `GitClient.get_file_history`/`get_co_change_history`,
 `rank_co_changed_files` (`src/utils/co_change_detector.py`), `get_local_module_files`
-(`src/utils/module_context_detector.py`). Python stdlib: `json`, `tempfile`, `pathlib`.
+(`src/utils/module_context_detector.py`), `extract_symbol_semantics`
+(`src/semantic/python/symbol_extractor.py`). Python stdlib: `json`, `tempfile`, `pathlib`.
 
 ## Future Improvements
 

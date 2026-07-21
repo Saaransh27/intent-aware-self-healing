@@ -1,5 +1,135 @@
 # Changelog
 
+## 2026-07-21 (Milestone 6 — Stage 6: real-world validation, all 6 stages complete)
+
+- Searched three real repositories (`pallets/flask`, `fastapi/fastapi`,
+  `tcx_nogrunt-1`) for the two hardest cases to construct synthetically: a non-trivial
+  rename and a naturally-occurring unparseable Python file.
+- **Found and verified a non-trivial rename**: `tcx_nogrunt-1` commit `d99f6cb`
+  (`.../backend/main.py` → `.../router.py`, git similarity R084 — real content change,
+  not a pure move). A FastAPI `app` being converted to an `APIRouter`: all 15 functions
+  correctly reported `change_type: "modified"`, `signature_changed: false`,
+  `decorators_changed: true` (e.g. `app.get(...)` → `router.get(...)`) — exactly what
+  the content-diff-across-paths rename design (ADR-005) should produce, and evidence
+  the alternative it rejected (treating renames as delete+create) would have wrongly
+  reported 15 removals + 15 additions instead. Also exercised
+  `_build_commit_change_set`'s rename branch against real data for the first time.
+- **Searched for and did not find** a naturally-occurring unparseable Python snapshot:
+  checked every `.py` blob at every non-merge commit in `tcx_nogrunt-1`'s full history
+  (275 commits, 394 snapshots) plus a sample of `flask`'s oldest commits, and searched
+  all three repos for committed merge-conflict markers. Zero hits — broken Python does
+  not appear to survive into these repos' merged history. The `parseable: false` path
+  remains verified via the hand-constructed cases from Stages 1/4 only, following the
+  same precedent set for `_build_commit_change_set`'s rename branch in Milestone 4A.
+- All six ADR-005 stages are now complete. Milestone 6 is still not "complete" per
+  `PROJECT.md` rule 4: nothing is wired into `collect()`, no `commit.json` exists.
+  Assembly is a distinct next step from extraction — same distinction already drawn for
+  Milestone 5A.
+
+## 2026-07-21 (Milestone 6 — Stage 5: DatasetCollector integration)
+
+- Built `DatasetCollector._build_commit_semantic_analysis(repo_path, commit_hash,
+  change_set)` — filters changed files to Python only, resolves old/new source per file
+  via `GitClient.get_file_content_at_commit`, and delegates entirely to
+  `extract_symbol_semantics`. Contains no AST logic itself, matching the orchestration
+  discipline already established for the four Milestone 5A extractors.
+- This method is the one place that resolves renames: `extract_symbol_semantics` cannot
+  see git identity, so after calling it with `old_path`'s source (at the parent commit)
+  and the new path's source (at `commit_hash`), this method overwrites the result's
+  `change_type` to `"renamed"` and sets `old_path`.
+- Verified against a real commit in `pallets/flask` (`06ea505c`, "separate copy per
+  call"): `pyproject.toml`/`uv.lock` correctly excluded (non-Python); `src/flask/ctx.py`
+  (a logic-only edit) correctly produced zero symbol entries — a real, honest
+  demonstration of this layer's limit (can't see inside a function body), not a bug;
+  `tests/test_reqctx.py` (a real test rewrite) correctly produced both `removed` and
+  `added` symbols, including a genuine four-level-deep nested function resolved with the
+  correct dotted qualified name.
+- Synced `docs/modules/dataset_collector.md` with the new orchestration method and its
+  verification detail.
+- Not wired into `collect()` — no `semantic_analysis` section has been written to an
+  actual `commit.json` yet (which itself still doesn't exist). Stage 6 (broader
+  real-world validation) remains.
+
+## 2026-07-21 (Milestone 6 — Stages 2-4: Semantic Diff, Import Analysis, public API)
+
+- Built `_diff_symbol_tables` (Stage 2): compares two symbol tables by qualified name,
+  emitting only symbols that are `added`/`removed`/genuinely `modified`; identical
+  symbols are omitted entirely. Verified against a real added/removed/modified mix:
+  signature and decorator diffs correct (decorator swap reported as one add + one
+  remove, not a full replace), docstring transitions correct both directions, an
+  untouched method produced no entry, self-diff produced zero entries.
+- Built `_diff_imports` (Stage 3): diffs imports at per-imported-name granularity, not
+  whole-statement text — reordering names within one `from X import a, b` does not
+  false-positive as a change. Verified with a combined reorder+add+remove case,
+  relative imports, `as`-aliasing, and `None` (added/deleted file) on either side.
+- Built `extract_symbol_semantics` (Stage 4), the module's only public function —
+  assembles Stages 1-3, infers `change_type` from source presence, and degrades
+  honestly (`parseable: false`, `imports`/`symbols` both `null`) on a `SyntaxError` in
+  either source. Explicitly cannot detect renames (no git identity available at this
+  layer) — documented as `DatasetCollector`'s responsibility for Stage 5. Verified
+  across all six branches: added, deleted, modified, unparseable old source,
+  unparseable new source, no-op diff.
+- Synced `docs/modules/symbol_extractor.md` to reflect the public API (previously
+  documented as not existing).
+
+## 2026-07-21 (Milestone 6 — Stage 1: AST + Symbol Extraction)
+
+- Built `src/semantic/python/symbol_extractor.py` (`_build_symbol_table`), the first of
+  six staged pieces of Milestone 6, per ADR-005.
+- Verified directly, not assumed: module docstrings excluded from the symbol table;
+  dunder methods (`__init__`) correctly classified `public` despite the
+  leading-underscore convention; a function nested inside a method gets a correct
+  dotted qualified name (`Foo.bar.helper`) and is classified `function`, not `method`;
+  positional-only/keyword-only parameter markers unparse cleanly via `ast.unparse`; a
+  genuine `SyntaxError` propagates rather than being swallowed (`parseable` handling is
+  Stage 4, not this stage); conditionally redefined same-named symbols (`if`/`else`,
+  `try`/`except`) collapse to one table entry — the exact edge case ADR-005 already
+  flagged as an accepted trade-off, now confirmed with real input rather than only
+  discussed.
+- No public API yet, nothing wired into `DatasetCollector` — Stages 2-6 remain.
+
+## 2026-07-20 (Milestone 6 — architecture frozen)
+
+- Recorded ADR-005: a new, independent, Python-only symbol-level semantic evidence
+  layer, architecturally parallel to Milestone 5A's `context`, motivated directly by
+  the 20-commit evaluation's and a follow-up critique's shared conclusion that code
+  semantics — not more git-derived statistics — is the highest-value remaining gap.
+- Amended the same day, before any code was written: module path changed from
+  `src/semantic/symbol_extractor.py` to `src/semantic/python/symbol_extractor.py` (a
+  language-named subpackage from the start, so a second language never requires
+  renaming existing code); output section renamed from `code_semantics` to
+  `semantic_analysis` (leaves room for multiple future semantic extractors under one
+  section name); Stage 1 renamed from "Symbol Table" to "AST + Symbol Extraction" to
+  name the actual parser -> AST -> symbol-table pipeline being built, not just its
+  output.
+- Six implementation stages defined, each gated by explicit confirmation before the
+  next begins: AST + Symbol Extraction, Semantic Diff, Import Analysis, public
+  extractor API, `DatasetCollector` integration, real-world validation.
+- No code written yet at this point — design-only, per the user's explicit instruction
+  to freeze architecture before implementation.
+
+## 2026-07-16 (20-commit qualitative evaluation)
+
+- Evaluated the full evidence pipeline (`repository.json`, all `commit.json` builder
+  methods, all four Milestone 5A extractors) against 20 real commits across 4
+  repositories (`fastapi/fastapi`, `pallets/flask`, `tcx_nogrunt-1`, and a local personal
+  repo found on this device, `~/Projects/Triple`), using a structured per-commit
+  template judging evidence sufficiency, not code correctness.
+- Delivered `docs/research/experiments.md` (20 full per-commit evaluations) and
+  `docs/research/observations.md` (cross-commit synthesis) — the first real content in
+  either file since project scaffolding.
+- Average rated usefulness 6.4/10 (range 4-9). Confirmed with real data:
+  `local_module_context` rated lowest in every commit; `change_set`/`co_change`/
+  `observations` rated highest.
+- New findings from comparing across commits (not visible from any single commit):
+  wide homogeneous commits produce repetitive per-file evidence blocks (Commits 6, 17);
+  a `.txt`/`.lock` dependency-file classification gap recurred in two unrelated repos
+  (Commits 8, 16); two consecutive commits in `tcx_nogrunt-1` (13, 14) fixed the same bug
+  in near-identical sibling files — the first concrete (not hypothetical) evidence that
+  the shelved "duplication relationship" idea from the earlier research phase would have
+  had real value.
+- No pipeline changes made — this is a findings-only evaluation.
+
 ## 2026-07-15 (Efficiency review — two caps added)
 
 - Generated real `repository.json` output and a full `commit.json` preview (all builder

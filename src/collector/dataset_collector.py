@@ -10,6 +10,7 @@ from src.utils.language_detector import detect_languages
 from src.utils.layout_detector import detect_layout
 from src.utils.module_context_detector import get_local_module_files
 from src.utils.signal_detector import detect_repository_signals
+from src.semantic.python.symbol_extractor import extract_symbol_semantics
 
 
 class DatasetCollector:
@@ -181,6 +182,42 @@ class DatasetCollector:
 
     def _build_commit_repository_signals(self, change_set):
         return detect_repository_signals(change_set["changed_files"])["repository_signals"]
+
+    def _build_commit_semantic_analysis(self, repo_path, commit_hash, change_set):
+        parent_hash = self.git_client.get_parent_hashes(repo_path, commit_hash)[0]
+        files = []
+
+        for file_path in change_set["added_files"]:
+            if Path(file_path).suffix.lower() != ".py":
+                continue
+            new_source = self.git_client.get_file_content_at_commit(repo_path, commit_hash, file_path)
+            files.append(extract_symbol_semantics(None, new_source, file_path))
+
+        for file_path in change_set["deleted_files"]:
+            if Path(file_path).suffix.lower() != ".py":
+                continue
+            old_source = self.git_client.get_file_content_at_commit(repo_path, parent_hash, file_path)
+            files.append(extract_symbol_semantics(old_source, None, file_path))
+
+        for file_path in change_set["modified_files"]:
+            if Path(file_path).suffix.lower() != ".py":
+                continue
+            old_source = self.git_client.get_file_content_at_commit(repo_path, parent_hash, file_path)
+            new_source = self.git_client.get_file_content_at_commit(repo_path, commit_hash, file_path)
+            files.append(extract_symbol_semantics(old_source, new_source, file_path))
+
+        for entry in change_set["renamed_files"]:
+            old_path, new_path = entry["old_path"], entry["path"]
+            if Path(old_path).suffix.lower() != ".py" and Path(new_path).suffix.lower() != ".py":
+                continue
+            old_source = self.git_client.get_file_content_at_commit(repo_path, parent_hash, old_path)
+            new_source = self.git_client.get_file_content_at_commit(repo_path, commit_hash, new_path)
+            result = extract_symbol_semantics(old_source, new_source, new_path)
+            result["old_path"] = old_path
+            result["change_type"] = "renamed"
+            files.append(result)
+
+        return {"files": files}
 
     def _build_commit_artifacts(self):
         return {
