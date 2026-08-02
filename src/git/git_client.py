@@ -1,4 +1,5 @@
 import subprocess
+from datetime import datetime
 
 EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
@@ -122,18 +123,37 @@ class GitClient:
             output = self.run_git_command(["ls-files"], cwd=repo_path)
         return output.splitlines()
 
-    def get_file_history(self, repo_path, commit_hash, file_path):
+    def get_file_history(self, repo_path, commit_hash, file_path, recent_window_days=30, author_email=None):
         output = self.run_git_command(
-            ["log", commit_hash, "--format=%ad", "--date=iso-strict", "--", file_path],
+            ["log", commit_hash, "--follow", "--format=%ad\x1f%ae", "--date=iso-strict", "--", file_path],
             cwd=repo_path,
         )
-        dates = output.splitlines()
-        return {
+        entries = [line.split("\x1f") for line in output.splitlines()]
+        dates = [entry[0] for entry in entries]
+
+        recent_commit_count = 0
+        if len(dates) > 1:
+            reference_date = datetime.fromisoformat(dates[0])
+            recent_commit_count = sum(
+                1
+                for date in dates[1:]
+                if (reference_date - datetime.fromisoformat(date)).days <= recent_window_days
+            )
+
+        history = {
             "total_commit_count": len(dates),
             "first_commit_date": dates[-1] if dates else None,
             "previous_commit_date": dates[1] if len(dates) > 1 else None,
             "is_first_appearance": len(dates) <= 1,
+            "recent_commit_count": recent_commit_count,
         }
+
+        if author_email is not None:
+            author_commit_count = sum(1 for entry in entries[1:] if entry[1] == author_email)
+            history["author_commit_count"] = author_commit_count
+            history["is_first_touch_by_author"] = author_commit_count == 0
+
+        return history
 
     def get_co_change_history(self, repo_path, commit_hash, file_path, max_history=50):
         output = self.run_git_command(

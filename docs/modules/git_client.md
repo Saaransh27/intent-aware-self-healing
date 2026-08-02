@@ -59,12 +59,31 @@ data out of a local git clone without any caller shelling out to `git` itself.
   a 2023 commit had since been deleted from current HEAD, silently returning nothing).
   Deliberately just a listing either way — classifying files by language is not git
   knowledge, that lives in `src/utils/language_detector.py`.
-- `get_file_history(repo_path, commit_hash, file_path) -> dict` — keys:
-  `total_commit_count`, `first_commit_date`, `previous_commit_date` (`None` if this is
-  the file's first-ever appearance), `is_first_appearance`. Scoped to `commit_hash`
-  itself (its ancestors), never `HEAD` — the same discipline every other method here
-  follows — so a historical sample can never "see" commits from its own future. One git
-  call, no follow-up lookups.
+- `get_file_history(repo_path, commit_hash, file_path, recent_window_days=30,
+  author_email=None) -> dict` — keys: `total_commit_count`, `first_commit_date`,
+  `previous_commit_date` (`None` if this is the file's first-ever appearance),
+  `is_first_appearance`, and (Milestone 8.5B) `recent_commit_count` — the number of
+  this file's historical commits (excluding the current one) within
+  `recent_window_days` of the current commit's own date, computed from the same date
+  list the underlying git call already returns; no new subprocess call. Scoped to
+  `commit_hash` itself (its ancestors), never `HEAD` — the same discipline every
+  other method here follows — so a historical sample can
+  never "see" commits from its own future. One git call, no follow-up lookups.
+
+  **`author_email` (Milestone 8.5C, ADR-010)**: optional. Omitting it preserves every
+  existing field and behavior exactly — this is not a second mode of the method, it's
+  an enrichment of the same query. When provided, the underlying git call's format
+  string gains one more `\x1f`-delimited field (`%ae`, the commit author's email)
+  alongside the existing `%ad` — still exactly one subprocess call — and the returned
+  dict gains two more keys: `author_commit_count` (commits to this file, before this
+  one, whose author's email exactly equals `author_email`) and
+  `is_first_touch_by_author` (`author_commit_count == 0`). Both keys are absent
+  entirely (not `None`) when `author_email` isn't passed — the same "status via
+  presence" discipline Evidence Fusion already uses elsewhere. Matching is exact
+  string equality done in Python on git's raw output, deliberately not git's own
+  `--author=<pattern>` flag, which matches by regex — a real hazard here, since email
+  addresses routinely contain regex metacharacters (`.`, `+`) that would silently
+  produce false matches.
 - `get_co_change_history(repo_path, commit_hash, file_path, max_history=50) -> list[list[str]]`
   — the up-to-`max_history` most recent commits touching `file_path` before `commit_hash`
   (excluding `commit_hash` itself), each represented as its full changed-file list. Raw
@@ -92,8 +111,22 @@ Python stdlib only (`subprocess`). Requires a `git` binary on `PATH`. No depende
   ahead of need, revisit if it stays unused. (`get_changed_files` now has one:
   `DatasetCollector._build_commit_change_set`.)
 - `clone_repository`'s `shallow` option isn't used by any current caller.
-- No custom exception types yet (`src/git/exceptions.py` exists but is empty) — errors
-  currently surface as raw `subprocess.CalledProcessError`.
-- `get_file_history` doesn't follow renames (`--follow`) — for a renamed file, history is
-  only counted from the point of the rename onward, under-counting its real age. Not yet
-  addressed.
+- No custom exception types yet — errors currently surface as raw
+  `subprocess.CalledProcessError`.
+- **Fixed in Milestone 19**: `get_file_history` now passes `--follow`, so a
+  renamed file's history (and everything derived from it — `recent_commit_count`
+  from Milestone 8.5B, `author_commit_count`/`is_first_touch_by_author` from
+  Milestone 8.5C/ADR-010) is traced back through the rename instead of
+  resetting at the rename boundary, exactly as anticipated in ADR-009/ADR-010's
+  own "Revisit When" notes.
+- `author_commit_count` identity is by exact email match, not by person — the same
+  real author committing as `bob@gmail.com` and `bob@company.com` is read as two
+  different identities, deliberately. No normalization/case-folding is applied; this
+  is a plain `==` comparison, by design, to avoid any judgment call about which
+  emails "really" belong to the same person.
+- Merge commits inherit whatever scoping `_build_commit_file_history`'s caller already
+  applies — `get_file_history`'s author-aware mode doesn't add any new merge-commit
+  handling of its own.
+- Deleted files need no special handling — a deleted file still has a path and a
+  git-log-able history up to the deletion commit; author-counting works identically
+  to any other changed file.

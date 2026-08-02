@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Review Playground</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.25rem; }
+  p.note { color: #555; font-size: 0.9rem; }
+  label { display: block; margin-top: 1rem; font-weight: 600; }
+  input { width: 100%; padding: 0.5rem; font-size: 1rem; box-sizing: border-box; margin-top: 0.25rem; }
+  button { margin-top: 1rem; padding: 0.6rem 1.2rem; font-size: 1rem; cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: 0.6; }
+  #status { margin-top: 1rem; font-style: italic; color: #555; }
+  #result { margin-top: 1.5rem; }
+  .section { margin-bottom: 1.25rem; }
+  .section h2 { font-size: 1rem; border-bottom: 1px solid #ddd; padding-bottom: 0.25rem; }
+  .section pre { white-space: pre-wrap; font-family: inherit; margin: 0; }
+  .meta { font-size: 0.85rem; color: #555; margin-bottom: 1rem; }
+  .error { color: #b00020; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Review Playground</h1>
+<p class="note">
+  Internal tool — replaces curl/Postman for exercising <code>POST /review</code>.
+  No auth, no history, nothing here is saved. Start the API first
+  (<code>uvicorn src.api.app:app --reload</code>), then open this file directly
+  in a browser.
+</p>
+
+<label for="repo">Repository URL</label>
+<input id="repo" placeholder="https://github.com/pallets/click">
+
+<label for="commit">Commit hash (optional — omit for the latest non-merge commit)</label>
+<input id="commit" placeholder="">
+
+<button id="submit">Analyze</button>
+<div id="status"></div>
+<div id="result"></div>
+
+<script>
+// Point this at wherever `uvicorn src.api.app:app` is running.
+const API_BASE_URL = "http://localhost:8000";
+
+const SECTION_LABELS = {
+  verdict: "Verdict",
+  what_changed_and_why: "What changed and why",
+  what_deserves_attention_ranked: "What deserves attention, ranked",
+  open_questions: "Open questions",
+  minor_notes: "Minor notes",
+};
+
+const repoInput = document.getElementById("repo");
+const commitInput = document.getElementById("commit");
+const submitButton = document.getElementById("submit");
+const statusEl = document.getElementById("status");
+const resultEl = document.getElementById("result");
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function renderReview(body) {
+  const findingsLine = body.findings && body.findings.length
+    ? `<br>findings: ${body.findings.length}`
+    : "";
+  const meta = `<div class="meta">
+    ${escapeHtml(body.repository_url)} @ ${escapeHtml(body.commit_hash)}<br>
+    outcome: ${escapeHtml(body.outcome)} — adapter_state: ${escapeHtml(body.adapter_state)}
+    ${findingsLine}
+  </div>`;
+
+  if (body.review.parsed) {
+    const sections = Object.entries(SECTION_LABELS)
+      .map(([key, label]) => `
+        <div class="section">
+          <h2>${label}</h2>
+          <pre>${escapeHtml(body.review.sections[key] || "")}</pre>
+        </div>
+      `)
+      .join("");
+    resultEl.innerHTML = meta + sections;
+  } else {
+    resultEl.innerHTML = meta + `
+      <div class="section">
+        <h2>Raw response (did not parse into the five sections)</h2>
+        <pre>${escapeHtml(body.review.raw || "")}</pre>
+      </div>
+    `;
+  }
+}
+
+async function analyze() {
+  const repository_url = repoInput.value.trim();
+  const commit_hash = commitInput.value.trim() || null;
+
+  if (!repository_url) {
+    statusEl.textContent = "Repository URL is required.";
+    return;
+  }
+
+  submitButton.disabled = true;
+  statusEl.textContent = "Running the pipeline — this can take up to a minute...";
+  resultEl.innerHTML = "";
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/review`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ repository_url, commit_hash }),
+    });
+
+    const body = await response.json();
+    statusEl.textContent = "";
+
+    if (!response.ok) {
+      const detail = body.detail !== undefined ? body.detail : body;
+      resultEl.innerHTML = `<div class="error">HTTP ${response.status}: ${escapeHtml(JSON.stringify(detail))}</div>`;
+      return;
+    }
+
+    renderReview(body);
+  } catch (err) {
+    statusEl.textContent = "";
+    resultEl.innerHTML = `<div class="error">Request failed: ${escapeHtml(String(err))} — is the API running at ${API_BASE_URL}?</div>`;
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+submitButton.addEventListener("click", analyze);
+</script>
+</body>
+</html>

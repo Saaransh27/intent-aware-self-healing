@@ -44,9 +44,17 @@ metadata, from a given GitHub repository, on disk, in the layout the benchmark e
 - **In progress (Milestone 5A — Context):** four independent "evidence extractors,"
   scoped down from a broader research phase (see `docs/context_design.md`). All four
   built:
-  - `_build_commit_file_history` — per changed file, its own historical commit
-    count/first-touched date/previous-touched date/whether this is its first-ever
-    appearance, via the new `GitClient.get_file_history`.
+  - `_build_commit_file_history(repo_path, commit_hash, change_set, metadata)` — per
+    changed file, its own historical commit count/first-touched date/previous-touched
+    date/whether this is its first-ever appearance, via `GitClient.get_file_history`.
+    **Milestone 8.5C (ADR-010)**: now also takes `metadata` and passes
+    `metadata["author"]["email"]` through as `get_file_history`'s `author_email`, so
+    every file's history entry also carries `author_commit_count`/
+    `is_first_touch_by_author` for this commit's specific author. This is the
+    project's first builder method depending on two upstream builders' output
+    (`change_set` and `metadata` both) rather than one — worth naming plainly rather
+    than treating as just another parameter, since every other builder here depends on
+    at most a single prior builder.
   - `_build_commit_co_change` — per changed file, its top historical co-change partners
     (files that empirically changed alongside it before), via the new
     `GitClient.get_co_change_history` (raw git mechanics — bounded history walk) plus

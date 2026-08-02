@@ -1,5 +1,1130 @@
 # Changelog
 
+## 2026-08-02 (Milestone 21 — Product Definition, no code)
+
+- Findings-only pass defining the product as it exists today: what a user
+  receives (a five-section triage review of one commit), the primary user
+  (backend engineers reviewing pull requests in Python codebases, given the
+  symbol-level semantic evidence is Python-only), the problem solved, the
+  first-time-user workflow end to end, the deliberate Version 1 non-goals
+  drawn from `PROJECT.md`, the strongest technical differentiator
+  (deterministic evidence kept separate from the LLM's narrowed triage
+  role, backed by a deterministic leak validator), and a 25-word
+  description. No code, prompt, architecture, or documentation changed; no
+  future work proposed.
+
+## 2026-08-02 (Milestone 20 — Final Release Audit, verification only)
+
+- Fresh, skeptical audit before tagging Version 1: re-traced the request
+  lifecycle, re-read all core docs plus `DECISIONS.md`, reconfirmed both
+  Milestone 19 fixes intact (203/203 tests).
+- Found one reproducible bug meeting the full reproducible/user-visible/
+  correctness/availability/reliability bar: the root-commit `IndexError` in
+  `_build_commit_semantic_analysis` (known since Milestone 14B), masked as
+  a misleading 404.
+- Found three hidden architectural inconsistencies: `run_full_pipeline.py`
+  and `src/api/app.py` now call two different models with no
+  reconciliation; the API's 90s request timeout is shorter than
+  `shakti_execute.py`'s own 120s internal HTTP timeout; and
+  `response_parser.py` keeps the *last* duplicate section heading while
+  the validator's own `duplicate_section_heading` message claims "only the
+  first is used."
+- Found two doc-vs-implementation disagreements, both a direct consequence
+  of Milestone 19 being scoped to exclude documentation — resolved in this
+  same documentation pass (see below).
+- Found one dead-in-effect function: `review_engine.py`'s
+  `_evaluate_response(response)` ignores its own argument and always
+  returns `[]`, executed on every request.
+- Found one production-critical test gap: `gemini_execute.py`/
+  `shakti_execute.py` — the actual real-provider HTTP integration code,
+  one of which is what every real production request executes — have zero
+  automated tests.
+- **Verdict: "I would tag this repository as Version 1."** No code or docs
+  modified in this milestone.
+
+## 2026-08-02 (Documentation pass — resolving Milestone 19's doc staleness)
+
+- Milestone 19 (below) was explicitly scoped to exclude documentation
+  updates; Milestone 20's audit found the resulting staleness and this
+  pass corrects it, alongside adding the missing Milestone 18/19/20/21
+  entries themselves.
+- `docs/CURRENT_STATE.md`: corrected the `get_file_history` "not yet
+  fixed" note (Milestone 8 section) and the `literal_claim_id_leak`
+  "10 claim-id prefixes" description (Milestone 17A section) to point to
+  Milestone 19's fixes; corrected the claim that `src/git/exceptions.py`
+  "exists but is empty" — the file does not exist in the repository.
+- `docs/modules/git_client.md`: same two corrections (the `--follow` gap
+  is fixed; the `src/git/exceptions.py` claim removed) in its Future
+  Improvements section.
+- `docs/ARCHITECTURE.md`: corrected the `src/pipeline/` description —
+  `shakti_execute.py` is no longer "used only for the Milestone 16B
+  benchmark"; it is `src/api/app.py`'s production default as of the
+  Milestone 16B full-execution round, and `run_full_pipeline.py`'s
+  continued use of `call_gemini` is now noted as an unreconciled
+  divergence rather than left implicit.
+- `docs/MILESTONES.md` / `docs/CURRENT_STATE.md`: added the missing
+  Milestone 18 (Release Readiness), 19 (Release Blockers), 20 (Final
+  Release Audit), and 21 (Product Definition) entries — none of the four
+  had any documentation trail before this pass.
+
+## 2026-08-02 (Milestone 19 — Release Blockers: fixed)
+
+- Closed exactly the two release blockers Milestone 18 identified. No
+  architecture, cleanup, refactoring, or unrelated changes.
+- **Blocker 1**: `src/response_validation/response_validator.py`'s
+  `_CLAIM_ID_PREFIXES` (10 prefixes + a generic `[a-z][a-z_]*` suffix
+  wildcard) replaced with `_CLAIM_IDS` — the complete, exact enumeration
+  of all 34 claim-id strings actually emitted by
+  `src/reasoning/modules/*.py` (re-confirmed via direct grep), matched by
+  exact alternation. Every existing legitimate detection preserved; the
+  false-positive class (ordinary filenames like `documentation.md`,
+  `structure.py`) eliminated.
+- **Blocker 2**: `src/git/git_client.py`'s `get_file_history` now passes
+  `--follow`. No-op for never-renamed files (verified by test); renamed
+  files now have history correctly traced through the rename, and every
+  field derived from the same call (`recent_commit_count`,
+  `author_commit_count`, `is_first_touch_by_author`) inherits the fix
+  automatically, exactly as ADR-009/ADR-010 anticipated.
+- Tests: 2 new in `tests/response_validation/test_response_validator.py`;
+  a new file, `tests/git/test_git_client.py` (3 tests — `GitClient`'s
+  first-ever test suite, using a real hermetic temp repo rather than
+  mocks). 203 tests total (198 + 5 new), zero regressions.
+- Regression cases confirmed directly against real data: the real
+  `mixed_doc_and_code` (click) response now validates `outcome: clean`
+  (was `invalid`); the real `rename_reorg` (click) commit's renamed file
+  now reports `is_first_appearance: false` (was `true`).
+- Per this milestone's explicit scope, no documentation was updated as
+  part of it — see the dedicated documentation-pass entry above for the
+  resulting staleness and its resolution.
+
+## 2026-08-02 (Milestone 18 — Release Readiness Audit, findings only)
+
+- Full release-readiness audit: read `ARCHITECTURE.md`/`CURRENT_STATE.md`/
+  `MILESTONES.md`/`CHANGELOG.md` in full, traced the real `POST /review`
+  request lifecycle stage-by-stage against actual source, ran a dead-code
+  sweep. No code or docs modified.
+- Found two release blockers: the response validator rejecting factually
+  correct reviews mentioning ordinary filenames (`documentation.md`), and
+  `GitClient.get_file_history` missing `--follow`, producing a misleading
+  "new file" claim in real, delivered GPT-OSS-120B review content for a
+  renamed file.
+- Found and explicitly labeled non-blocking: the CLI/API model divergence
+  (`run_full_pipeline.py` vs. `src/api/app.py`); the API/Shakti timeout
+  mismatch; the parser-vs-validator duplicate-heading inconsistency
+  (never observed in ~48 real responses); the root-commit `IndexError`;
+  the Review Engine's permanently-empty `findings`; the lack of prompt
+  truncation/context-window handling.
+- Confirmed dead code: `DatasetCollector._build_commit_identity`,
+  `DatasetCollector._build_commit_artifacts` (both unused), and
+  `_PARSEABILITY_RELATED_RULES` in `src/api/app.py` (unused constant).
+- Recommendation: **NOT READY**, pending the two blockers — see
+  Milestone 19.
+
+## 2026-08-02 (Milestone 16B — full 24-commit execution + production model swap)
+
+- **Production model swap** (an explicit, in-milestone user decision, not
+  part of the original evaluation-only scope): `src/pipeline/shakti_execute.py`'s
+  `SHAKTI_MODEL` changed from `llama3_3` to `openai/gpt-oss-120b`; the
+  request no longer sends a deployment-specific `id` header (not required
+  for this model). `src/api/app.py`'s `get_pipeline_runner` now wires
+  `execute=call_shakti` instead of `execute=call_gemini`. **GPT-OSS-120B via
+  Shakti Studio is now the real production model** for `POST /review`;
+  Gemini is no longer called anywhere in the shipped path (`gemini_execute.py`
+  is unchanged and still callable, just unused). All 198 pre-existing tests
+  pass unmodified.
+- Ran the full frozen 24-commit Milestone 16B corpus (12 categories × 2, 12
+  repositories: click, flask, pytest, requests, django, numpy, httpx,
+  sqlalchemy, poetry, black, fastapi, jinja) fresh against the new
+  production pipeline, and fact-checked every response against the real
+  `git show` diff.
+- **A partial run of this same corpus was discarded mid-milestone**: an
+  earlier attempt reused 10 commits from Milestone 15D's `eval_results_v3`
+  to conserve Gemini's daily quota, but those 10 records were found to
+  have been generated under an earlier revision of Prompt v1 (missing the
+  heading-format instruction) — invalid as "current production pipeline"
+  evidence. The production model swap made this moot by requiring a full
+  fresh 24-commit run regardless.
+- **Finding: internal-terminology leakage is systematic for GPT-OSS-120B
+  under Prompt v1**, per the workflow's own threshold (3+ commits, 2+
+  repositories). `terminology_leak` fired on 9/24 commits across 9/12
+  repositories, several as verbatim internal claim-id strings. `over_warning`
+  (8/24, 6 repos), `semantic_padding` (5/24, 5 repos), and `verbosity`
+  (5/24, 3 repos) also cross the threshold; `missed_issue` (2/24, 2 repos)
+  and `hallucination` (1/24, 1 repo) do not.
+- **Cross-checked against the live Response Validation Layer** (Milestone
+  17B) on the 9 leaking responses: 3 are hard-rejected (`502`,
+  `literal_claim_id_leak`), 4 more are flagged but still delivered (`200`,
+  `module_jargon_leak`), and 2 return `outcome: clean` — no validator
+  signal at all. **6 of 9 real leaks (67%) would reach an actual end user
+  today.**
+- No prompt, validator, or jargon-pattern change was made in response to
+  this finding — per this milestone's explicit "evidence collection only"
+  instruction. No ADR was touched.
+
+## 2026-08-01 (Milestone 17B — Response Validation Layer: integration)
+
+- Wired the Milestone 17A validator into `POST /review`: pipeline order is
+  now `run_adapter` → `run_review_engine` → `parse_review_sections` →
+  `validate_response` → API response, run on the exact `response` text
+  returned in `review.raw`. No prompt, parser, Review Engine, Adapter,
+  reasoning-module, or `response_validator.py` code was touched.
+- **Found a genuine architectural conflict during integration, not
+  before it, and stopped to report it rather than resolving it silently**:
+  Milestone 14B already decided a response missing sections is a
+  recoverable condition (`parsed: false`, still `200`), while 17A's
+  `missing_section` rule is `ERROR`-severity and the original "invalid →
+  reject" instruction would have silently reversed that decision and broken
+  an existing, passing test.
+- **Resolved by explicit user decision**: findings split into Category A
+  (`missing_section`, `unclosed_code_fence` — exactly what `parsed: false`
+  already represents; never rejected, findings attached instead) and
+  Category B (`literal_claim_id_leak`, `reserved_confidence_tier_self_tagging`
+  — genuine contract violations Milestone 14B never addressed; rejected
+  with `502`, the first case in this project where a generated response is
+  never returned to a client). Category B takes precedence when both fire
+  together. This preserves Milestone 14B's original layering (parsing
+  answers structural-interpretability; the validator answers
+  contract-compliance) rather than letting the newer component silently
+  override the older decision.
+- **API schema**: `ReviewResponse` gains one new optional field,
+  `validation: ValidationResult | None = None` — `None` when there are no
+  findings, populated (with `outcome` + `findings`) whenever there are,
+  including for non-rejected Category A cases. Additive only; no existing
+  field renamed, removed, or restructured.
+- **Verified**: 14 new tests
+  (`tests/api/test_app.py::ResponseValidationIntegrationTests`) — clean,
+  flagged, both Category A rules individually, both Category B rules
+  individually (rejected, no `review` body ever returned), Category B
+  precedence over co-occurring Category A findings, validator invocation
+  with the exact raw text (spied), validator-exception propagation as an
+  unhandled server error, and full backward-compatibility of every
+  pre-existing field. **All 9 pre-existing API tests pass unmodified** — none
+  needed to change. All 198 tests across the repository pass (184
+  pre-existing + 14 new), zero regressions.
+- Synced `MILESTONES.md`, `CURRENT_STATE.md`, `ARCHITECTURE.md`.
+
+## 2026-08-01 (Milestone 17A — Response Validation Layer: implementation)
+
+- Implemented `docs/research/response_validation_layer_design.md` exactly,
+  as a standalone component only — no wiring into `POST /review` yet (that's
+  Milestone 17B). No prompt, parser, Review Engine, Adapter, or
+  reasoning-module code was touched.
+- Built `src/response_validation/response_validator.py` (new package): one
+  public function, `validate_response(response_text) -> dict`. Deterministic,
+  side-effect-free, independent of any LLM — response text only, no
+  evidence/Claims/Gaps access, never logs/prints/raises/mutates/sanitizes.
+- Implemented all 11 catalogued rules, none invented beyond the approved
+  design: 4 Formatting (`missing_section` ERROR; `duplicate_section_heading`,
+  `sections_out_of_order`, `unknown_heading` WARNING), 3 Internal terminology
+  (`literal_claim_id_leak` ERROR, anchored on the exact 10 claim-id prefixes
+  derived from `src/reasoning/modules/*.py`; `reserved_confidence_tier_self_tagging`
+  ERROR, the 4 words `FORBIDDEN BEHAVIORS` reserves for Claims, carefully
+  distinguished from the 4 allowed uncertainty terms; `module_jargon_leak`
+  WARNING, a growable phrase list seeded from Milestone 16B's real leaks), 4
+  Structural (`empty_section_body`, `duplicated_paragraph`,
+  `malformed_markdown` WARNING; `unclosed_code_fence` ERROR — implemented via
+  a fence-aware heading scanner so an unclosed fence naturally cascades into
+  `missing_section` findings alongside the root-cause finding, both
+  reported).
+- Reused `src/api/response_parser.py`'s already-public `SECTION_KEYS`
+  constant without modifying that module at all; implemented a private,
+  independent heading-scan helper rather than touching the parser's private
+  internals.
+- **Verified**: 75 new tests (`tests/response_validation/test_response_validator.py`)
+  — every rule covered positively and negatively, all 10 claim-id prefixes
+  individually tested plus confirmed non-flagging of real code references
+  (`numpy.pad`, `self.band.id`), all 4 reserved words individually tested
+  plus confirmed non-flagging of the 4 allowed uncertainty terms, the
+  unclosed-fence cascade tested explicitly, combined multi-violation cases,
+  determinism, non-mutation, and defensive input handling. All 184 tests
+  across the repository pass (109 pre-existing + 75 new), zero regressions.
+- Synced `MILESTONES.md`, `CURRENT_STATE.md`, `ARCHITECTURE.md`.
+
+## 2026-08-01 (Milestone 17 — Response Validation Layer: design only)
+
+- Delivered `docs/research/response_validation_layer_design.md`, answering
+  Milestone 16B's root-cause recommendation with a full design: a new,
+  deterministic, post-Review-Engine layer inspecting response text only (no
+  evidence, no second LLM call) for formatting compliance, internal-
+  terminology leaks, and structural well-formedness. Covers placement
+  (outside the Review Engine and outside `response_parser.py`, justified via
+  the same elimination test used throughout this project's ADRs),
+  input/output contract, a full validation catalogue split into Formatting/
+  Internal terminology/Structural, a per-rule severity model
+  (ERROR/WARNING, reject/sanitize/log-only), and a minimal architecture
+  proposal (one new package, `src/response_validation/`, one public
+  function, zero modified files).
+- No code, prompt, parser, or ADR changes were made — design review only,
+  per explicit instruction. Implementation is named as the next milestone.
+- Synced `MILESTONES.md`, `CURRENT_STATE.md`.
+
+## 2026-08-01 (Milestone 16B execution — three-model benchmark + GPT-OSS prompt calibration)
+
+- Ran the Milestone 16B evaluation workflow's first 6-commit batch (django,
+  numpy, httpx, sqlalchemy, poetry) against three alternative models via
+  Shakti Studio's OpenAI-compatible API: Llama 3.3 70B Instruct, DeepSeek
+  V3, GPT-OSS-120B. No pipeline/prompt/evaluation-logic code changed to run
+  this; only `src/pipeline/shakti_execute.py` (new, additive, Llama 3.3) and
+  two scratch-only equivalents (kept outside `src/` per that round's
+  explicit instruction) were added.
+- Found each model has a genuinely different, non-dominant trade-off
+  profile across structural reliability, uncertainty-vocabulary use,
+  internal-terminology leak rate, length-risk scaling, and technical depth —
+  no single model wins cleanly on every axis.
+- **Reopened `SYSTEM_PROMPT` twice after Milestone 15E's freeze**, each time
+  explicitly justified against the freeze's own four-condition test on real
+  GPT-OSS-120B evidence: (1) an explicit Markdown-heading instruction,
+  closing a genuine specification gap — GPT-OSS-120B went from 0/6 to 6/6
+  heading compliance, held across two independent re-runs, zero regression;
+  (2) two additive counter-examples for internal-terminology leaks, seeded
+  from observed phrases — reduced but did not eliminate leaks; the
+  *identical* prompt produced different leak outcomes across consecutive
+  re-runs (0/6 then 1/6), and suppressing one jargon phrase caused a
+  differently-worded variant to appear instead.
+- **Root-cause investigation** (no further prompt changes) concluded the
+  heading gap was genuinely deterministic and is now durably closed; the
+  terminology-leak family is stochastic, proven by identical-prompt/
+  different-outcome evidence, and **Prompt v1 has reached diminishing
+  returns on this failure family for GPT-OSS-120B**. Recommended a
+  deterministic post-processing check as the next engineering investment,
+  not further prompt iteration — see Milestone 17.
+- Synced `MILESTONES.md`, `CURRENT_STATE.md`.
+
+## 2026-07-31 (Milestone 16A/16B — Review Playground + Evaluation Workflow design)
+
+- Per explicit instruction: product validation before product polish. Split
+  into a minimal internal tool (16A, built) and a structured evaluation
+  workflow design (16B, design only — not executed).
+- **16A**: built `playground/index.html` — a single, self-contained,
+  dependency-free static HTML/CSS/vanilla-JS page (no framework, no build
+  step, no new Python package) replacing curl/Postman for `POST /review`:
+  repository URL field, optional commit hash field, Analyze button, loading
+  state, and formatted rendering of the five review sections (or the raw
+  response, when unparsed). The one necessary backend touch:
+  `src/api/app.py` gained `CORSMiddleware` (`allow_origins=["*"]`) so a
+  `file://`-opened page can reach the API — transport-level permission, not
+  new logic; the endpoint surface is still exactly `POST /review` and `GET
+  /health`, unchanged from Milestone 14B. Verified live: `/health` responds
+  and a CORS preflight from a `file://`-style origin returns the expected
+  `access-control-allow-origin: *` header. All 109 tests still pass.
+- **16B**: delivered `docs/research/evaluation_workflow.md` — a repeatable
+  methodology for a future ~24-commit evaluation (12 categories across 7-8+
+  repositories, up from Milestone 15's 10 categories across 4), a
+  structured per-commit JSON recording schema extending the already-proven
+  rubric with one new `failure_tags` field for cross-round aggregation, and
+  an explicit rule mapping aggregated results onto Milestone 15E's
+  four-condition freeze test (a tag must recur on 3+ commits across 2+
+  repositories to count as systematic; any resulting wording change must be
+  re-validated against the same frozen corpus). No evaluation was executed
+  and no code was written for 16B — design only.
+- Synced `MILESTONES.md`, `CURRENT_STATE.md`, `ARCHITECTURE.md`.
+
+## 2026-07-31 (Milestone 15E — Freeze Prompt v1)
+
+- Closed the full Milestone 15/15B/15C/15D arc. Summary: semantic-analysis
+  padding 5/10 → 0/10; review length scales proportionally with commit
+  complexity; the 15B "nothing requires special attention" regression was
+  largely recovered in 15D (8/10 commits fully recovered or held clean); the
+  two remaining differences (dependency-update co-change nudge partially
+  reappearing, Requests test-only missing-test-case gap staying absent) are
+  isolated edge cases, not systematic failures. No architecture changed
+  throughout; all 109 tests passed at every step.
+- **Decision: `SYSTEM_PROMPT` is frozen as Prompt v1**, under the same
+  discipline this project applies to every ADR — frozen until evidence
+  justifies revision. Recorded the exact four-condition test a future
+  revision must satisfy: (1) observed in real usage/production evaluation,
+  not synthetic testing; (2) repeatable across multiple commits; (3) a
+  systematic failure, not expected model variance; (4) a proposed fix
+  demonstrably verified not to introduce a larger regression, using the same
+  evaluate-then-re-validate discipline as Milestones 15-15D.
+- **Prompt Engineering is considered finished** as a distinct workstream as
+  of this milestone. No prompt or code changes were made in this milestone.
+- Synced `MILESTONES.md`, `CURRENT_STATE.md`, `ARCHITECTURE.md`.
+
+## 2026-07-31 (Milestone 15D — Final Prompt Calibration)
+
+- Diagnosed the exact regression Milestone 15C found: Milestone 15B's
+  "nothing requires special attention" clause only distinguished between a
+  headline concern and nothing, giving no permission for legitimate modest
+  observations, and let that conclusion become available as a shortcut
+  before the reasoning sequence's evidence-checking steps actually ran.
+- Applied one further additive edit to `SYSTEM_PROMPT` section 3 in
+  `src/prompt/prompt_builder.py`, replacing only that clause: every point
+  that would reasonably change how the reviewer evaluates or follows up on
+  the commit must now be included, even if modest, and "nothing requires
+  special attention" is gated on every concern already being fully covered
+  by the Verdict and What-changed-and-why sections. No other line changed.
+  All 109 tests still pass.
+- Re-ran the identical 10 Milestone 15 commits. 8 of 10 fully recovered or
+  held clean; semantic-analysis padding improved further (0/10); trivial
+  commits stayed concise while only commits needing restored content grew
+  back toward their original length. The Flask refactor and Flask
+  large-multi-file commits both recovered strong, substantive findings, not
+  always via the identical original framing — consistent with ordinary
+  non-deterministic generation.
+- Two residual issues confirmed, both narrower than the original
+  regression: the dependency-update co-change nudge partially reappeared;
+  the Requests test-only missing-test-case gap remained permanently absent
+  (present both before and after this change, so not something this edit
+  caused).
+- Recommended one more narrow wording adjustment as a possible next step;
+  the user chose to freeze instead — see "Prompt v1 frozen" above.
+
+## 2026-07-31 (Milestone 15C — Prompt Validation: findings only)
+
+- Re-ran the identical 10 Milestone 15 commits against the Milestone 15B
+  prompt with no prompt or code changes. Semantic-analysis padding and
+  length-scaling both validated cleanly. The third change regressed:
+  "nothing requires special attention" caused three commits with legitimate
+  moderate-value findings to collapse to "nothing," and softened the single
+  most valuable finding from the whole Milestone 15 sample (a real Flask
+  backward-compatibility break) into a materially weaker point.
+- Delivered a "do not freeze yet" recommendation with the exact regressed
+  commits and root-cause diagnosis named.
+
+## 2026-07-31 (Milestone 15B — Prompt Calibration)
+
+- Implemented the smallest possible fix for the three product issues
+  Milestone 15's real-commit evaluation confirmed, per explicit instruction:
+  not a prompt redesign, no new ADR-013 sections, no Prompt Builder logic
+  changes, no Review Engine changes, no new deterministic modules,
+  uncertainty vocabulary unchanged.
+- Judged all three issues solvable primarily through prompt wording (the
+  Claims/Gaps data was never wrong — only the model's judgment about what to
+  surface from it), with one honest caveat: verbosity scaling can be
+  strongly nudged by wording but not mechanically enforced without Prompt
+  Builder logic these constraints forbid.
+- Three purely additive edits to `SYSTEM_PROMPT`'s `OUTPUT FORMAT` in
+  `src/prompt/prompt_builder.py` — zero existing lines removed or reworded:
+  a length-proportionality sentence reusing the existing `OBJECTIVE`
+  paragraph's "cost" framing (verbosity); two sentences in section 3
+  explicitly legitimizing "nothing requires special attention" as a valid
+  answer (over-warning); a relevance gate added to section 4 using the
+  exact observed semantic-analysis-padding pattern as its own counter-example
+  (Open Questions padding).
+- Explicitly named, not glossed over, the regression risks: permitting
+  "nothing requires attention" could make the model less likely to surface a
+  genuinely subtle concern on a commit that only looks safe; the Open
+  Questions relevance gate could cause over-generalization, dismissing a
+  gap that matters in a rare case; the verbosity instruction anchors on
+  "complexity and risk" rather than diff size specifically to avoid
+  under-writing a small-but-dangerous commit, but wording cannot force that
+  distinction every time.
+- **Verified**: all 109 existing tests pass unchanged — the edit is purely
+  additive, so every exact-substring fidelity test from Milestone 10B's
+  fidelity pass still holds.
+- **Not done in this milestone**: no re-validation against real commits —
+  the Milestone 15 10-commit sample was not re-run against the new prompt.
+- Synced `MILESTONES.md`, `CURRENT_STATE.md`, `ARCHITECTURE.md`, including a
+  retroactive Milestone 15 (evaluation findings) entry.
+
+## 2026-07-31 (Milestone 15 — Real-world Pipeline Evaluation: findings only)
+
+- Ran the real pipeline (real Gemini calls) against 10 hand-selected real
+  commits across 4 public repos (`pallets/click`, `pallets/flask`,
+  `pytest-dev/pytest`, `psf/requests`), covering 10 distinct commit
+  categories, evaluated purely as a real early user reading each review —
+  no implementation inspection, no ADR comparison.
+- Zero hallucinations found across the sample after spot-checking every
+  notable claim against the real diffs, including two independently
+  verified high-value findings: a real backward-compatibility break in
+  Flask's `RequestContext` alias (a 36-file refactor) and two unrelated
+  Click commits where the model caught a genuine changelog/behavior
+  contradiction. No internal claim-id leaks recurred (Milestone 13's single
+  example did not repeat in this sample).
+- Confirmed three recurring product issues, prioritized by user impact:
+  generic "no semantic analysis for non-Python files" padding in Open
+  Questions (5/10 commits); a real-but-minor deterministic signal elevated
+  to a headline concern on an otherwise safe dependency bump; comparable
+  prose density on trivial commits and a 36-file refactor.
+- No code written — findings/prioritization only. See Milestone 15B above
+  for the resulting fix.
+
+## 2026-07-31 (Milestone 14B — MVP API implemented)
+
+- Per explicit instruction, this milestone implemented Milestone 14's proposal
+  exactly as agreed, with four decisions fixed up front: use FastAPI; expose
+  exactly `POST /review` and `GET /health`; keep the existing pipeline
+  completely unchanged; no auth/databases/queues/retries/caching/provider
+  abstraction/deployment concerns. No ADR was touched. The Adapter and Review
+  Engine were not redesigned — `run_adapter`/`run_review_engine` are called
+  exactly as Milestone 11A/12 left them.
+- **Refactored the orchestration.** `run_full_pipeline.py`'s inline `main()`
+  logic is now `src/pipeline/orchestrator.py`'s `run_pipeline_for_commit(
+  repository_url, commit_hash, execute) -> dict` — a plain function, no class,
+  matching this project's established data-contract convention. It knows
+  nothing about any specific provider (`execute` is a required parameter, no
+  default, mirroring `run_adapter`'s own signature discipline) and raises a
+  new `CommitResolutionError` when the repository can't be cloned or the
+  target commit can't be resolved, giving the API a single, clean exception to
+  map to a 404. `run_full_pipeline.py` is now a thin CLI wrapper around it,
+  the same thinness `main.py` already has around `DatasetCollector`. The real
+  Gemini `execute` implementation (`call_gemini`/`_ssl_context`, unchanged
+  logic) moved to `src/pipeline/gemini_execute.py` so both the CLI and the API
+  can import it without inverting this project's established dependency
+  direction (`src/` never imports from a root-level script).
+- **Built `src/api/`** (new package): `response_parser.py` —
+  `parse_review_sections(text) -> dict | None`, a regex-based splitter
+  matching the five literal section headings `SYSTEM_PROMPT` instructs
+  (`prompt_builder.py`'s `OUTPUT FORMAT`), tolerant of heading order and case,
+  returning `None` (never raising) if any of the five is missing. Deliberately
+  does not parse anything below heading level — the model's own internal
+  sub-structure (e.g. bolded "Concern:"/"Traceability:" labels observed in the
+  real Milestone 13 response) is unspecified by ADR-013 and not reliable.
+  Lives outside the Review Engine entirely, per explicit instruction — ADR-016
+  is untouched. `models.py` — Pydantic request/response schema matching the
+  previously agreed design. `app.py` — the FastAPI app: `GET /health` (trivial
+  liveness only) and `POST /review`, which resolves a pipeline-runner via a
+  `Depends()` seam (overridden in tests, never touching the network), wraps
+  the call in a `concurrent.futures.ThreadPoolExecutor` with a 90-second
+  bound for the 504 case, and maps outcomes to status codes: request
+  validation errors → 422 (FastAPI's default, not the 400 discussed
+  informally — reconciled as an acceptable convention, not a deviation);
+  `CommitResolutionError` → 404; `adapter_boundary_failure` → 500;
+  `execution_boundary_failure` → 502 (deliberately one uniform response for
+  all of timeout/rate-limit/provider-error/malformed-response, since
+  `run_adapter` collapses them indistinguishably by ADR-015's own frozen
+  Explicit Absence/No Fabrication invariants — differentiating them at the API
+  layer would mean fabricating certainty the pipeline doesn't have); success
+  with an unparseable response → 200, `parsed: false`, `raw` preserved
+  exactly, not an error.
+- Added `fastapi`, `uvicorn`, `httpx` to `requirements.txt` — this project's
+  first-ever runtime dependencies, a decision the user made explicitly rather
+  than left to be inferred.
+- **A real, pre-existing bug was found, not fixed**: `DatasetCollector.
+  _build_commit_semantic_analysis` unconditionally indexes
+  `get_parent_hashes(...)[0]`, which is empty for a repository's root commit
+  (no parent to diff `.py` files against) — raises `IndexError`. Pinned by a
+  new test (`test_root_commit_is_a_known_pre_existing_limitation`) rather than
+  fixed, per this milestone's explicit "keep the existing pipeline completely
+  unchanged" instruction. `run_pipeline_for_commit`'s own exception handling
+  around evidence assembly happens to catch it and surface it as
+  `CommitResolutionError` (a clean 404), rather than crashing the API
+  unhandled — a side effect, not a deliberate fix.
+- **One resource-leak bug fixed during the refactor**: Milestone 13's script
+  called `tempfile.mkdtemp()` once per run to satisfy `DatasetCollector`'s
+  constructor, creating a directory that was never written to or cleaned up
+  (the collector's `.collect()` method, the only thing that writes to
+  `output_directory`, is never called in this workflow). Fixed by passing the
+  already-existing, already-cleaned-up clone directory instead — trivial,
+  non-architectural, applied directly.
+- **Verified**: 24 new tests (`tests/pipeline/test_orchestrator.py` — 6,
+  including one real synthetic local git repo built via subprocess, mirroring
+  Milestone 4A's synthetic-repo precedent, with a stubbed `execute`, no
+  network; `tests/api/test_response_parser.py` — 8, pure unit tests;
+  `tests/api/test_app.py` — 10, using FastAPI's `TestClient` with
+  `app.dependency_overrides` to control every pipeline outcome, no real
+  Gemini call anywhere). All 109 tests across every `tests/` package pass
+  together, including all 85 pre-existing tests unchanged.
+- No changes to any ADR. `run_adapter` and `run_review_engine` are byte-for-byte
+  unchanged.
+- Synced `MILESTONES.md`, `CURRENT_STATE.md`, `ARCHITECTURE.md` — including a
+  retroactive Milestone 14 (API preparation proposal) entry that should have
+  been synced when it was first delivered and was not.
+
+## 2026-07-31 (Milestone 14 — API preparation: proposal, no code)
+
+- Reviewed the real Milestone 13 Gemini response against `SYSTEM_PROMPT`'s
+  literal instructed text rather than ADR-013's paraphrased summary — this
+  corrected an earlier informal claim of "section header drift" (there was
+  none; all five headings were reproduced exactly, including the unusual
+  "What deserves attention, ranked" phrasing) and confirmed the one real
+  defect already known (the leaked claim id `verification.no_test_files_changed`)
+  is the only genuine ADR-013 violation in that response — the "Resolution:"
+  line under Open Questions is compliant, not a violation, since
+  `prompt_builder.py`'s Open Questions section explicitly instructs "here is
+  what would resolve it."
+- Proposed exactly one revised `SYSTEM_PROMPT` edit — a concrete
+  counter-example added to `WHAT MUST NEVER APPEAR` — responding to the one
+  trigger condition Milestone 10B's freeze explicitly reserved for future
+  wording changes: "a measurable behavioral problem from real model output."
+  Not applied in this entry — presented as a proposal pending confirmation.
+- Determined the five-section markdown format can be parsed reliably at the
+  section-heading level (one real sample, but a clean one — headings matched
+  literally, in order) and NOT reliably below heading level (unspecified,
+  model-discretionary sub-structure). Recommended a lenient, best-effort
+  parser living outside the Review Engine.
+- Recommended the minimal REST surface (`POST /review`, `GET /health`),
+  clarified that the four requested failure categories (timeout/rate
+  limit/provider error/malformed response) collapse to fewer HTTP-observable
+  buckets than requested, because `run_adapter` erases which of them occurred
+  by design (ADR-015's Explicit Absence/No Fabrication invariants) — not a
+  gap to fix, a boundary to respect.
+- Flagged one decision requiring explicit confirmation before implementation:
+  taking on this project's first-ever runtime dependency (a micro-framework)
+  versus a stdlib-only HTTP layer. Resolved by explicit instruction in
+  Milestone 14B: use FastAPI.
+- No code written — proposal only, per this milestone's own scope. See
+  Milestone 14B above for the implementation.
+
+## 2026-07-30 (Milestone 13 — Real LLM Integration: first end-to-end execution)
+
+- Per explicit instruction, this milestone was implementation-only: "implementation
+  is the default... we are no longer designing architecture unless implementation
+  exposes a genuine contradiction." No ADR was touched; no architectural
+  contradiction was found — the only stopping point along the way was a missing
+  credential in the environment, resolved directly by the user supplying a real
+  Gemini API key.
+- Built `run_full_pipeline.py` (new, root-level, sibling to `main.py`) — the first
+  script to exercise every layer from a cloned commit through to a real model
+  response and back through the Review Engine in one run. `src/`  itself is
+  untouched: `build_evidence()` calls `DatasetCollector`'s existing private
+  builder methods (`_build_commit_metadata`, `_build_commit_change_set`,
+  `_build_commit_observations`, `_build_commit_repository_signals`,
+  `_build_commit_file_history`, `_build_commit_co_change`,
+  `_build_commit_local_module_context`, `_build_commit_semantic_analysis`) in
+  sequence to assemble the full evidence dict Evidence Fusion expects — closing,
+  for this one script's purposes only, the "nothing wires these together" gap
+  every milestone since 4A has carried forward. `DatasetCollector.collect()`
+  itself is still not wired to do this; that gap remains, named explicitly below
+  as future work rather than fixed here.
+- `call_gemini(system_prompt, user_prompt)` is the first real `execute`
+  implementation for `run_adapter` (Milestone 11A/ADR-015) — a plain function
+  using stdlib `urllib.request` against Google's Generative Language API
+  (`gemini-flash-latest`), reading `GEMINI_API_KEY` from the environment only,
+  never written to any file or persisted. It lives in the script, not in `src/`,
+  since a permanent home for a real provider implementation is explicitly future
+  work (see below), not this milestone's scope.
+- **Real end-to-end execution achieved**: cloned `pallets/click`, selected commit
+  `0f4738df88e3ea47c40a4a442103596a61cfee79` ("Fix docs and changelog," 11 files),
+  ran the full chain — `fuse_evidence` → `run_reasoning`/`synthesize` →
+  `build_review_context` → `build_prompt` → `run_adapter` (against the real
+  Gemini call) → `run_review_engine`. Result: `adapter_result.state == "success"`,
+  `review_result.outcome == "evaluated"`, the real response preserved
+  byte-for-byte through the Review Engine, `findings: []` (the category-1
+  catalogue remains deliberately unimplemented, per ADR-016's own deferral).
+  System prompt: 7,551 characters. User prompt: 26,190 characters, rendering 4
+  commit-level claims, 11 files' `file_claims`, and 0 symbol-level claims (the
+  real Python edits were docstring/comment/annotation-only).
+- **Two real environment obstacles found and fixed, neither a `src/` code bug**:
+  this Python installation has no configured default SSL CA trust store
+  (`ssl.get_default_verify_paths()` returns `cafile=None`), fixed via a
+  script-local `_ssl_context()` helper falling back to `certifi`'s bundle —
+  deliberately not added to `requirements.txt` or any `src/` module, preserving
+  the project's zero-third-party-dependency discipline for the actual codebase.
+  The first Gemini model tried (`gemini-2.0-flash`) had a `0` free-tier quota
+  under the supplied key (`429 RESOURCE_EXHAUSTED`); `gemini-flash-latest` was
+  confirmed to have quota and used instead.
+- **One real model-behavior finding, not a pipeline bug**: the real Gemini
+  response literally surfaced the raw internal claim id
+  `verification.no_test_files_changed` in its "What deserves attention" section
+  — exactly what ADR-013's "must never appear" rule (internal deterministic
+  vocabulary as visible jargon) forbids. Applying ADR-014's own bug-vs-mistake
+  diagnostic test (was everything required present, correct, and complete in
+  what was actually sent?) against the real system/user prompt confirms yes —
+  so this is classified as a model mistake, not a Prompt Builder or pipeline
+  defect. This is the first time that diagnostic test has been exercised
+  against real, not hypothetical, output.
+- No regressions: all 85 existing tests (`tests/review/`, `tests/prompt/`,
+  `tests/adapter/`, `tests/review_engine/`) still pass — no `src/` module was
+  modified by this milestone.
+- Explicitly not implemented, per this milestone's own "do NOT implement" list:
+  retries, caching, provider abstraction redesign, prompt optimization, model
+  comparison, frontend, authentication, GitHub API integration, databases,
+  analytics, telemetry, pricing, deployment, background workers.
+- **Future milestone candidates named, not built**: wiring `DatasetCollector.
+  collect()` itself to produce the full evidence dict as a permanent, reusable
+  capability (rather than the ad hoc sequencing this script performs); deriving
+  the Review Engine's category-1 validation catalogue for `_evaluate_response`
+  (the leaked-claim-id finding above is now a concrete, real motivating case);
+  a permanent `src/`-resident home for a real `execute` implementation, with
+  model/provider selection as configuration; retries/resilience for the
+  Adapter's `execute`, still deferred per ADR-015; a delivery/presentation
+  layer consuming the Review Engine's result, which does not exist yet.
+- Synced `MILESTONES.md`, `CURRENT_STATE.md`, `ARCHITECTURE.md`.
+
+## 2026-07-30 (Milestone 12 — Review Engine implemented)
+
+- Froze ADR-016 (Review Engine Contract) through the same one-question-at-a-time
+  methodology as ADR-015, across eleven questions, with two abstraction leaks
+  caught and corrected before freezing (a validation-catalogue leak in the
+  information contract; a premature invariant, Evaluation Portability, dropped
+  entirely rather than demoted), the state model corrected twice by
+  elimination-testing every candidate state rather than assuming symmetry with
+  ADR-015, and the Adapter-trust boundary re-derived a second time after an
+  initial justification was found to depend on Milestone 11A's implementation
+  rather than on architecture. A final six-category consistency audit across
+  ADR-011–016 found and fixed one residual abstraction-leak echo before
+  declaring the freeze clean.
+- Produced a full implementation plan for ADR-016 (public interface, internal
+  helpers, data flow, observable branches, edge cases, testing plan,
+  documentation, plan-level adversarial audit) before writing any code.
+  Incorporated two reviewer-requested refinements before implementation: removed
+  a proposed `_is_artifact_present` helper as unnecessary abstraction (a single
+  comparison with one call site, inlined instead of named), and corrected the
+  plan's premature freezing of concrete field names, deferring the exact result
+  shape to implementation itself — the same discipline ADR-015 applied to the
+  Adapter's own result shape.
+- Built `src/review_engine/review_engine.py` (new package, sibling to
+  `src/adapter/`): one public function, `run_review_engine(adapter_result) ->
+  dict`, taking exactly the Adapter's output with no second parameter, since
+  evaluation has no external dependency to inject. Two helpers:
+  `_evaluate_response(response)`, currently returning `[]` unconditionally since
+  ADR-016 explicitly defers which category-1 properties are checkable to a
+  later derivation; and `_build_result(...)`, the one uniform shape shared by
+  both outcomes (`no_artifact`, `evaluated`).
+- Wrote `tests/review_engine/test_review_engine.py` — 11 tests, stdlib
+  `unittest`, including a `unittest.mock.patch` test proving
+  `_evaluate_response` is never called for either Adapter failure kind. All
+  pass; all 85 tests across `tests/review/`, `tests/prompt/`, `tests/adapter/`,
+  and `tests/review_engine/` pass together. Validated end-to-end through the
+  real `build_prompt` → `run_adapter` → `run_review_engine` chain, on both a
+  successful and a failing model stub.
+- Synced `docs/modules/review_engine.md`, `MILESTONES.md`, `CURRENT_STATE.md`,
+  `ARCHITECTURE.md`. No changes made to any ADR during implementation.
+
+## 2026-07-26 (Milestone 11A — LLM Adapter implemented)
+
+- Produced a full implementation plan for ADR-015 (package layout, public API,
+  data flow, state transitions, error handling, testing strategy, integration
+  points, explicit list of decisions not revisited) before writing any code,
+  then ran the same adversarial-audit process used to freeze ADR-015 itself
+  against that plan. Found zero architectural violations and zero drift, one
+  real internal inconsistency in the plan's own description of `execute`'s
+  contract, and two genuine specification gaps (non-`str`/non-`None` returns
+  from `execute`; extra-key handling in prompt validation) — all corrected
+  before implementation began.
+- **A genuine conflict with ADR-015's frozen text was found and reported,
+  not silently resolved**, while incorporating a requested refinement: an
+  instruction to classify a non-`str` return from `execute` (including
+  `None`) as `adapter_boundary_failure` conflicted with ADR-015's closed
+  transition rule — "Attempting resolves to either Execution-boundary
+  failure or Success" — since `execute` must already be invoked (Attempting
+  under way) to return anything at all, malformed or not. Stopped and
+  presented three resolutions rather than picking one silently. Resolved (by
+  explicit instruction) in favor of the ADR's literal transition table:
+  every outcome of an invoked `execute` — raising, or returning a non-`str`
+  value — is `execution_boundary_failure`; the specific reason for a
+  malformed return is preserved internally only, via a dedicated,
+  directly-tested helper function, never exposed in the public result.
+- Built `src/adapter/llm_adapter.py` (new package, sibling to `src/review/`
+  and `src/prompt/`): one public function, `run_adapter(prompt, execute) ->
+  {"state": ..., "response": ...}`. Plain function, no class, per ADR-015's
+  "holds no state across calls." `execute` is an injected, deliberately
+  opaque callable standing in for a real model call — its own
+  implementation is explicitly out of scope, per ADR-015's own deferral.
+  Prompt validation requires `system_prompt`/`user_prompt` present and typed
+  as `str`; additional keys are explicitly allowed and ignored. Both
+  validation-failure and malformed-execution-result reasons are preserved
+  internally via `_invalid_prompt_reason`/`_invalid_execution_result_reason`,
+  never surfaced in the public return value.
+- Wrote `tests/adapter/test_llm_adapter.py` — 27 tests, stdlib `unittest`,
+  including the two internal reason-computing helpers tested directly (a
+  deliberate exception to testing only the public function, since the
+  reason-preservation property has no other way to be verified once it
+  never appears in `run_adapter`'s return value). All pass; all 74 tests
+  across `tests/review/`, `tests/prompt/`, and `tests/adapter/` pass
+  together. Validated end-to-end against a real `build_prompt(...)` output —
+  no adapter shim needed between the two modules.
+- **Post-implementation architecture audit against ADR-015, run before
+  considering this milestone complete:** re-traced the actual implemented
+  code (not the plan) clause by clause against ADR-015's frozen text.
+  Confirmed: Adapter-boundary failure is reachable only before `execute` is
+  ever called (line-level check — `execute` cannot be reached once
+  `_invalid_prompt_reason` finds a problem); every path that calls `execute`
+  resolves only to `execution_boundary_failure` or `success`, matching the
+  closed transition table exactly; `_success` is reachable only when the
+  result has already been proven to be a `str` by
+  `_invalid_execution_result_reason`, so `response` can never be a non-`str`
+  value in a success result; both failure branches hardcode `response: None`
+  with no parameter that could smuggle content through (No Fabrication
+  structurally enforced, not just by convention); no cross-call state, no
+  randomness, no wall-clock dependency anywhere in the module (Bounded
+  determinism of the Adapter's own logic, satisfied); exactly one `return`
+  reached per call, from one of four mutually-exclusive branches, so the
+  four forbidden transitions remain unrepresentable by construction, not
+  merely disallowed. Both specification gaps flagged during the plan-level
+  audit are confirmed closed in the actual code and covered by tests. No
+  new violations or drift found. `docs/DECISIONS.md` was not modified this
+  session — ADR-015 remains exactly as frozen.
+- Synced `docs/modules/llm_adapter.md`, `MILESTONES.md`, `CURRENT_STATE.md`,
+  `ARCHITECTURE.md`.
+
+## 2026-07-26 (Milestone 10C — ADR-015 frozen: LLM Adapter Contract)
+
+- Researched and froze ADR-015 (LLM Adapter Contract) through the same
+  one-question-at-a-time methodology as Milestone 9: responsibility boundary,
+  input/output contract, failure contract, state contract — each answered from
+  first principles with alternatives explicitly rejected, each followed by a
+  critical or adversarial review before moving to the next question. No code
+  written; architecture only, per `PROJECT.md` rule 4.
+- Key decisions: the Adapter's sole responsibility is transport plus
+  *structural* normalization of whatever a model execution produces, never
+  semantic normalization — the same structure-never-meaning philosophy ADR-011
+  gave `ReviewContextBuilder`, carried one boundary further. Named explicitly
+  as the first deliberate exception to this project's full-pipeline
+  determinism (every ADR from ADR-006 through ADR-014 holds determinism as an
+  invariant; this is the first boundary where it cannot hold, because it
+  depends on an external process outside this project's control). A two-kind
+  failure taxonomy — Adapter-boundary failure (never validly attempted) vs.
+  Execution-boundary failure (attempted, concluded, nothing resulted) — and a
+  five-state contract (Received, Attempting, plus three terminal states)
+  express this without touching retries, providers, or any implementation
+  technology, all explicitly deferred. Presence/absence is defined
+  structurally (an answer-shaped result exists or it doesn't), never by
+  content adequacy. Four invariants — Response Transparency, Content
+  Preservation, Explicit Absence, No Fabrication — produce provider
+  independence as their consequence, inherited by reference from ADR-012/014
+  rather than re-derived.
+- **A dedicated adversarial audit was run before freezing**, hunting explicitly
+  for duplication across ADR-011–015, misplaced ownership, unobservable
+  distinctions, indistinguishable states, and invariants restating each other
+  without adding a guarantee. It found and corrected real issues: two
+  candidate invariants (a determinism guarantee scoped to the Adapter's own
+  logic; a guarantee against losing already-obtained information) were found
+  fully subsumed by other statements in the ADR once its state contract
+  existed, and removed rather than kept for symmetry with other ADRs'
+  invariant counts; a genuine ambiguity (does minimal/empty content count as
+  "present") was surfaced and resolved structurally rather than left implicit;
+  Provider Independence's rationale was redirected to inherit from ADR-012/014
+  by reference rather than re-derived from scratch; Adapter-boundary failure
+  was reframed as existing for contract completeness, not expected operation,
+  matching Evidence Fusion's `not_collected` precedent. All five corrections
+  were incorporated before freezing, not after.
+- **Froze ADR-015 as Accepted** in `docs/DECISIONS.md` (architecture only, no
+  code, per `PROJECT.md` rule 4).
+- **Final cross-ADR consistency audit (ADR-011 through ADR-015), run after
+  freezing:** found and fixed one real error — ADR-015's Context paragraph
+  originally stated ADR-011 through ADR-014 were all "frozen and implemented,"
+  which is inaccurate: only ADR-011 and ADR-014 are implemented (Milestones
+  10A, 10B); ADR-012 and ADR-013 remain frozen architecture, restated as fixed
+  instructions inside the Prompt Builder's system prompt, not independently
+  implemented by anything. Corrected in place before this entry was written.
+  No contradictory responsibilities or duplicated ownership were found between
+  ADR-015 and ADR-011–014 — the responsibility handoff (ReviewContext →
+  Prompt → Adapter) is consistent at every boundary checked, and no ADR claims
+  a responsibility already claimed by another. One non-blocking observation,
+  not rising to a contradiction or broken reference: request-side integrity
+  (the Adapter must transmit `system_prompt`/`user_prompt` unmodified) is
+  stated in ADR-015's architectural-drift list but not elevated to a formally
+  named invariant the way response-side integrity is (Content Preservation,
+  Response Transparency) — the guarantee exists in substance, just
+  asymmetrically documented; noted for awareness, not corrected, since the
+  actual guaranteed behavior is unaffected and this ADR is now frozen.
+- **This completes the Milestone 10 architecture.** ADR-011 and ADR-014 are
+  implemented; ADR-012, ADR-013, and ADR-015 are frozen architecture with no
+  code. Per explicit instruction, architectural work on this line stops here —
+  the next milestone begins implementation of the LLM Adapter against
+  ADR-015, not further ADR refinement.
+- Synced `MILESTONES.md`, `CURRENT_STATE.md`, `ARCHITECTURE.md`.
+
+## 2026-07-26 (Milestone 10B — ADR-014 fidelity pass, freeze)
+
+- Ran a clause-by-clause trace of `SYSTEM_PROMPT` against ADR-012/013's literal
+  text. Found six deviations: `HOW TO WRITE EACH POINT`'s worked example had
+  paraphrased ADR-013's directly-quoted example instead of reproducing it verbatim;
+  Reasoning Step 4 included wording ("specific, falsifiable theories about how the
+  change could fail") sourced from `docs/research/reviewer_reasoning_model.md`
+  rather than ADR-012's own frozen text; two of ADR-013's per-section content
+  exclusions were missing (Verdict's "not a claim inventory, not style detail";
+  "What changed and why"'s "not line-by-line detail, not raw diff text reproduced
+  wholesale"); ADR-012's "not something to resolve silently in either direction"
+  (message/diff disagreement) was missing; ADR-013's third usefulness principle
+  ("silence about the unknown is a defect, not a virtue") was missing.
+- Fixed all six in place. Added six regression tests, one per fix, so none can
+  silently regress (`tests/prompt/test_prompt_builder.py`: 19 → 25 tests; 47 tests
+  total across `tests/review/` and `tests/prompt/`, all pass).
+- Ran a second clause-by-clause trace after the fix. No further fixable deviations
+  found. The remaining differences from the ADRs' exact wording — shortened
+  rationale clauses, one structurally-moot exclusion, an unlabeled
+  receiving/generating distinction, one unrestated rejected-role-alternative — are
+  recorded as **accepted editorial compressions, not architectural deviations** in
+  `docs/modules/prompt_builder.md`'s new "Fidelity review outcome (frozen)" section.
+- **Milestone 10B is frozen as complete. ADR-014 is treated as fully implemented**
+  for the Prompt Builder's scope. `SYSTEM_PROMPT` wording is not to be refined
+  further against the ADRs' phrasing — only against a measurable behavioral problem
+  from real model output, should one ever be found. `DECISIONS.md` was not
+  modified — ADR-014's own text remains untouched, per this project's append-only
+  ADR discipline; the "fully implemented" status is recorded in `MILESTONES.md`
+  and `CURRENT_STATE.md` instead. Milestone 9 as a whole remains incomplete: no
+  LLM Adapter or ReviewEngine exists yet.
+- Synced `docs/modules/prompt_builder.md`, `MILESTONES.md`, `CURRENT_STATE.md`.
+
+## 2026-07-26 (Milestone 10B — Prompt Builder implemented)
+
+- Before writing code: read ADR-014 in full, ADR-011/012/013 for interfaces only,
+  and the current architecture, produced a written implementation plan (package
+  layout, public API, data flow, integration point, determinism, testing strategy,
+  edge cases, explicit assumptions, what ADR-014 leaves unspecified), then a
+  self-critical review against ADR-014 (responsibility mapping, layer drift, model
+  specificity, model-agnosticism) before presenting it — no code written until the
+  plan was confirmed.
+- Resolved three genuinely open questions by explicit instruction rather than
+  implementation judgment: `commit_hash` is never included in either prompt half
+  (internal addressing identifier, not evidence, no semantic value to the model);
+  Claims/Gaps/Evidence Units/Coverage Ledger are embedded as verbatim `json.dumps`
+  blocks, not hand-formatted prose (faithful transmission, not translation); output
+  keys are `system_prompt`/`user_prompt` (provider-neutral, any SDK-specific mapping
+  belongs to a future LLM Adapter).
+- Built `src/prompt/prompt_builder.py` (new package, sibling to `src/review/`): one
+  public function, `build_prompt(review_context) -> {"system_prompt", "user_prompt"}`.
+  `SYSTEM_PROMPT` is a fixed constant restating ADR-012's role/reasoning
+  sequence/precedence/decline boundary/uncertainty vocabulary/forbidden
+  behaviors/objective plus ADR-013's output format/content rules/tone/philosophy —
+  never trimmed, never computed per call. The user prompt renders the
+  `ReviewContext`'s five sections as verbatim JSON, in fixed order — deliberately
+  chosen over hand-formatted prose to eliminate any paraphrasing surface.
+- Wrote `tests/prompt/test_prompt_builder.py` — 19 tests, stdlib `unittest`. All
+  pass; all 41 tests across `tests/review/` and `tests/prompt/` pass together.
+  Validated end-to-end against the same real on-disk commit used for Milestone 10A.
+- Synced `docs/modules/prompt_builder.md`, `MILESTONES.md`, `CURRENT_STATE.md`,
+  `ARCHITECTURE.md`. No changes made to ADR-011/012/013/014 — treated as accepted,
+  frozen architecture throughout, per explicit instruction.
+
+## 2026-07-25 (Milestone 10A — ADR-011 review fixes)
+
+- Ran a critical implementation review of `src/review/context_builder.py` against
+  ADR-011's literal text. Fixed the five confirmed defects, without redesigning any
+  architecture:
+  - Added the required minimal commit-identity reference: `build_review_context`
+    now takes a `commit_hash` parameter, returned as `ReviewContext["commit_hash"]`.
+  - Removed `author`/`date` from Commit Summary — ADR-011 enumerates only the
+    message plus file-change facts; those two fields weren't in that enumeration.
+  - Unified ordering: the collapse representative is now the first file in
+    `change_set["changed_files"]`'s own order (was: alphabetically first), and
+    `coverage_ledger`'s file list uses that same order instead of a separate
+    alphabetical sort — one canonical sequence across the whole `ReviewContext`,
+    not two.
+  - Renamed `coverage_ledger[]["collapsed_files"]` to `collapsed_group_files` — it
+    lists the whole collapse group including the representative (tagged `"full"`,
+    not `"collapsed"`), so the old name misdescribed its own contents.
+  - `commit_claims`/`file_claims`/`symbol_claims`/`gaps` are now `copy.deepcopy`'d
+    before being placed in the `ReviewContext`, so mutating the returned object can
+    never corrupt the Synthesizer's original output.
+- Left three findings deliberately unfixed, per instruction not to change the
+  public-contract exemption behavior, not to implement per-hunk Evidence Units, and
+  not to redesign the Claim contract — documented instead as explicit decisions/open
+  questions in `docs/modules/context_builder.md`'s new "Explicit decisions and open
+  questions" section.
+- Updated `tests/review/test_context_builder.py` for the new signature and field
+  name; added 6 new tests (commit-identity presence, author/date absence, non-
+  aliasing, diff-order representative selection, added-file line range,
+  coverage-ledger/evidence-units order consistency). 22 tests total, all pass.
+  Re-validated against the same two real `diff.patch` files as before.
+
+## 2026-07-25 (Milestone 10A — Review Context Builder implemented)
+
+- Built `src/review/context_builder.py` (new package, sibling to `src/fusion/` and
+  `src/reasoning/`), implementing ADR-011 exactly: one public function,
+  `build_review_context(synthesized, metadata, change_set, diff_text) -> dict`,
+  returning a plain dict (no new class, matching existing project convention).
+- Splits the raw diff into per-file Evidence Units with a new file-path-plus-
+  line-range address; relays Claims/Gaps from the Synthesizer verbatim; collapses a
+  file only when commit-wide-candidate (`shape.wide_change`/`homogeneous_categories`)
+  and not risk-bearing (checked against both `file_claims` and the symbol-scoped
+  `contract_stability` claims in `symbol_claims`); records every collapse in a
+  Coverage Ledger with its justifying claim(s).
+- Wrote `tests/review/test_context_builder.py` — 16 tests, stdlib `unittest`, this
+  project's first real test suite. All pass. Additionally validated against two real
+  `diff.patch` files already on disk (`benchmark/fastapi/...`,
+  `benchmark/tcx_nogrunt-1/...`) — correct line ranges confirmed by hand against the
+  visible `@@` hunk headers.
+- Explicitly did not implement per-hunk Evidence Unit splitting (ADR-011 names it as
+  conditional, "where warranted," without defining the trigger — flagged as a
+  documented limitation, not invented here) or any of PromptBuilder/LLMAdapter/
+  ReviewEngine (ADR-012–014), per this milestone's explicit scope.
+- Synced `docs/modules/context_builder.md`, `MILESTONES.md`, `CURRENT_STATE.md`,
+  `ARCHITECTURE.md`.
+
+## 2026-07-24 (Milestone 9 — Semantic Reasoning: architecture frozen across four ADRs)
+
+- Recorded ADR-011 (Review Context), ADR-012 (LLM Reasoning Contract), ADR-013
+  (Review Output Contract), and ADR-014 (Prompt Builder Contract) — the full
+  architecture connecting the frozen deterministic layer to a future LLM-driven
+  review, consolidated from the Milestone 9 research arc
+  (`docs/research/reviewer_reasoning_model.md`,
+  `docs/research/milestone9_transition_research.md`). Architecture only — no
+  code exists yet, per `PROJECT.md` rule 4.
+- ADR-011 names a new component, the Review Context Builder, sitting between the
+  Reasoning Layer and everything downstream — separates Input Sources from a
+  constructed, five-section, fully addressable Review Context; owns all
+  summarization deterministically using only already-computed claims.
+- ADR-012 freezes the model's role as triage (not review), a seven-stage
+  reasoning sequence, a four-tier evidence-precedence hierarchy, a decline
+  boundary, a four-term non-numeric uncertainty vocabulary, forbidden behaviors,
+  and one optimization objective — maximize the reviewer's justified trust per
+  unit of reading time.
+- ADR-013 freezes the human-facing review's five-section shape, ordered by cost
+  of missing each point, read as a prioritized reviewer assistant rather than a
+  report or checklist.
+- ADR-014 freezes what any Prompt Builder must guarantee regardless of model
+  family — strict system/user separation, verbatim-vs-referenced content rules,
+  forbidden instruction categories, a Prompt-Builder-bug-vs-model-mistake test,
+  forbidden assumptions about model capability, and two refinements: the Prompt
+  Builder guarantees only faithful delivery (never model compliance or output
+  quality), and a new Prompt Transparency invariant — no hidden per-commit
+  instructions outside the frozen system contract.
+- Caught and corrected a numbering collision during this consolidation: the
+  requested ADR numbers (009–012) collided with two already-real, already-
+  implemented ADRs (009 Historical Evidence Depth, 010 Author Familiarity). Used
+  011–014 instead, continuing the real sequence. The standalone research file
+  informally titled "ADR-011: The Reviewer Reasoning Model" was retitled to
+  avoid the same collision, since it was never part of the numbered `DECISIONS.md`
+  sequence to begin with.
+
+## 2026-07-24 (Milestone 8.5C — Author Familiarity: designed, built, verified — final deterministic capability)
+
+- Recorded ADR-010. Answers one reviewer question only — "has this commit's author
+  worked on this file before?" — closing the one candidate ADR-009's first-principles
+  review judged highest-value but left unbuilt pending real-data justification.
+- Extended `GitClient.get_file_history` with an optional `author_email` parameter:
+  the existing single git log call gains one more `\x1f`-delimited format field
+  (`%ae`), still one subprocess call; when provided, the returned dict gains
+  `author_commit_count` and `is_first_touch_by_author`. Every existing caller and
+  field is unaffected by omitting it.
+- `_build_commit_file_history` gains a `metadata` parameter to pass the author's
+  email through — the project's first builder method depending on two upstream
+  builders' output rather than one, documented explicitly.
+- Evidence Fusion needed zero code changes — the existing `file_history` passthrough
+  already exposes whatever keys the dict carries.
+- Added `history.first_author_touch` to `historical_risk.py` — deliberately named as
+  a fact ("first touch"), not an interpretation ("unfamiliar author"), which is left
+  to Milestone 9. No new `CONSUMES`, no new gap type, no new module.
+- Verified against four real cases in `pallets/flask`, including a real,
+  naturally-occurring alternating-author history confirming `author_commit_count`
+  excludes the current commit with no off-by-one.
+- **Final assessment**: no further architecturally-justified deterministic
+  capability gaps remain. The deterministic layer (Milestones 5A–8.5C) is frozen;
+  Milestone 9 is semantic/LLM reasoning.
+
+## 2026-07-23 (Milestone 8.5B — Historical Evidence Depth: designed, built, verified)
+
+- Recorded ADR-009. Unlike 8.5A, this milestone started from a first-principles
+  review of the deterministic ceiling for historical evidence (reviewer workflow +
+  existing evaluation), not a named batch finding — six candidates evaluated against
+  the pipeline's actual existing fields; two (author familiarity, ownership
+  concentration) judged highest-value but deferred pending new per-file author
+  extraction; four declined (fix/bug keyword density, diff-size stats, time-of-day
+  patterns, cross-file author overlap).
+- Extended `GitClient.get_file_history` with `recent_commit_count` (free — reuses
+  the date list its git call already fetches). Added `history.rapid_iteration` and
+  `history.high_recent_churn` to `historical_risk.py`, and
+  `reach.expected_co_change_partner_missing` to `reach.py` (zero new extraction —
+  cross-references `co_change`'s existing partner list against the commit's own
+  changed-file set for the first time).
+- Verified against real commits in `pallets/click`, including both the positive and
+  negative case for the new `reach` claim on two different real commits.
+- Not wired into any pipeline entrypoint — verified standalone, same status every
+  prior milestone has had at this stage.
+
+## 2026-07-23 (Milestone 8.5A retest — 20 real commits, 2 per original batch)
+
+- `docs/research/body_evidence_retest.md`: re-ran the actual pipeline
+  (`contract_stability` alone vs. `contract_stability` + `body_evidence`) against 20
+  real commits, 2 selected from each of the 10 original evaluation batches, chosen as
+  the ones the original evaluation most directly implicated in body-only blindness.
+- Of the 16 commits where Python re-extraction was possible: 10 previously-invisible
+  body-only changes are now correctly surfaced (including the exact commits the
+  original evaluation named for `warnings.warn`, the `_is_set` crash fix, and the
+  `stream_with_context` refactor); 2 remain correctly invisible for the
+  already-documented control-flow/no-surface reasons.
+- **New finding, not predicted by ADR-008**: 2 commits (`langchain`, `requests`)
+  remain invisible for a distinct reason — the set-diff representation shows no
+  delta when a call/exception site changes but the same name already exists
+  elsewhere in the same function. Confirmed independently in two unrelated repos.
+  Flagged, not fixed.
+- Also confirmed at scale on two large multi-file commits (crewAI's 2447-line, 20-file
+  commit; Django's 47-file mail commit): `structure.internal_symbol_added`'s
+  same-file-modified gate behaved correctly under real pressure, and no measurable
+  performance cost was observed.
+
+## 2026-07-23 (Milestone 8.5A — Function-Body Evidence: designed, built, verified)
+
+- Recorded ADR-008, closing the #1 cross-batch finding from the 10-batch reasoning
+  evaluation, "Function Body Blindness" — a symbol with unchanged signature/
+  decorators/docstring produced no diff entry at all, even with a substantially
+  changed body. An initial ~7-candidate proposal organized by AST node type was
+  revised once at the user's direction into five reviewer-facing evidence categories:
+  interaction changes, error-handling changes, resource-management changes,
+  documentation/deprecation changes, internal-structure changes — AST node types stay
+  the extraction mechanism, never the schema's vocabulary. A standalone
+  `warnings.warn` detector was dropped in favor of general callee-tracking, which for
+  free also explains two other real batch findings (Requests' `hasattr` addition,
+  Django's `functools.wraps` addition).
+- Extended `src/semantic/python/symbol_extractor.py`: `_record_function` extracts
+  `callees`/`exceptions_raised`/`exceptions_caught`/`context_managers` per symbol;
+  `_diff_symbol_tables` set-diffs each and nests them under a new `body_evidence` key
+  grouped by the five categories, plus a `deprecation_marker_added` boolean. Added
+  `body_evidence`-changed to the existing modified-check — the actual fix, since
+  extracting the facts without this would leave them computed but still unreachable.
+- Built `src/reasoning/modules/body_evidence.py` (`CONSUMES = ["semantic_analysis"]`),
+  emitting six claims across the five categories; registered in `registry.MODULES`
+  alongside the existing five, as a sibling to `contract_stability`, not a merge into
+  it.
+- Verified against two real, independently-selected commits: `pallets/click`'s
+  `c2ed414` (the exact commit that originally surfaced the `warnings.warn` question)
+  and `pallets/click`'s `555fa9b` (`Context.__exit__`/`Context.close` changing their
+  callee target with signature/decorators/docstring all unchanged — previously
+  invisible, now correctly surfaced).
+- Not wired into any pipeline entrypoint — verified standalone, same status every
+  prior milestone has had at this stage.
+
+## 2026-07-21 (Milestone 8 — Deterministic Reasoning Layer: designed, built, verified)
+
+- Recorded ADR-007. Reflects five real design revisions before implementation: enforced
+  per-module `consumes` contracts (registry filters evidence before invoking a module,
+  not just self-discipline); removed a static per-evidence-category confidence ranking
+  in favor of confidence computed per claim from that claim's own basis; added stable,
+  dotted, machine-addressable claim IDs (`contract.public_signature_changed`); removed
+  cross-module conflict detection from the Synthesizer entirely (interpreting whether
+  two modules' claims contradict each other is reasoning, not aggregation); required
+  every module to declare `NAME`/`CONSUMES`/`PRODUCES`/`LIMITATIONS` as plain,
+  inspectable metadata.
+- Built `src/reasoning/contracts.py` (the enforced-consumes filter plus Claim/Gap/scope
+  builders) and five modules — `change_shape`, `historical_risk`, `reach`,
+  `verification_coverage`, `contract_stability` — each single-file, each with its own
+  declared contract. `src/reasoning/registry.py` runs them as a flat list (no DAG:
+  Fusion is every module's only possible input). `src/reasoning/synthesizer.py`
+  collects and groups by scope only — no ranking, no cross-module conflict detection.
+- Verified against real commits: `pallets/flask` (`06ea505c`) — `reach.
+  corroborated_wide_reach` fired correctly where both `co_change` and
+  `local_module_context` independently indicated wide reach; `contract_stability`'s 22
+  claims for a real test-file rewrite were hand-verified against the raw
+  `semantic_analysis` symbols to rule out double-processing. `tcx_nogrunt-1`
+  (`d99f6cb`) — dropping `semantic_analysis` entirely correctly produced 24 gaps, zero
+  false claims.
+- **Real, previously-unknown upstream gap found via this validation**: every renamed
+  file in `d99f6cb` incorrectly produced `history.first_appearance`, because
+  `GitClient.get_file_history` (Milestone 5A) has no `--follow` and stops at the rename
+  boundary. The reasoning layer correctly reported what it was given — the gap is in
+  extraction, not reasoning. Flagged in `docs/modules/reasoning.md`, not fixed inline.
+- Not wired into any pipeline entrypoint — verified standalone, same status every prior
+  milestone has had at this stage. The five-module registry is explicitly provisional.
+
+## 2026-07-21 (Milestone 7 — Evidence Fusion: designed, built, and verified)
+
+- Recorded ADR-006: Evidence Fusion, a lossless, entity-centric adapter between the
+  extraction sections and the future Reasoning Engine. Reflects three real design
+  iterations, not a single pass: rejected relabeling sections into reviewer vocabulary
+  (`co_change` → "reach") as unearned interpretation; rejected a `{status, reference}`
+  pointer design (a `{section, key, locator}` descriptor into the original evidence) on
+  the grounds that a pointer doesn't actually hide structure — the consumer still has
+  to know how to dereference it; landed on `{status, evidence}` with the value copied
+  out directly, making Fusion the only code coupled to each section's internal shape.
+- Built `src/fusion/evidence_fusion.py` — one public function, `fuse_evidence`,
+  producing one commit-level bundle and one bundle per changed file. Status
+  (`ok`/`not_applicable`/`not_collected`) is determined purely by presence, never by
+  inspecting a value's content. No `"context"` wrapper — the four Milestone 5A sections
+  are treated as flat, independently-optional top-level keys, since that nesting was
+  proposed in `docs/context_design.md` but never decided or built.
+- The one genuine reshape in the module: a file's `change_set` bundle entry is a
+  derived `file_status` (which of four lists the path was found in, or a rename), using
+  `change_set`'s own existing words — not an invented concept. The complete, untouched
+  `change_set` object is still passed through verbatim in the commit bundle, so nothing
+  is lost even here.
+- Verified against real commits, not constructed examples: `pallets/flask` (`06ea505c`)
+  — non-Python files correctly `not_applicable` for `semantic_analysis`, and a direct
+  comparison confirmed every `"ok"` value is byte-identical to the raw extractor
+  output; `tcx_nogrunt-1` (`d99f6cb`) — the real non-trivial rename validated in
+  Milestone 6 correctly reshapes to `{"file_status": "renamed", "old_path": ...}`, and
+  the file-bundle count exactly matched `change_set.changed_files`'s count (24),
+  confirming no file was silently dropped. `not_collected` verified by simulating a
+  missing section.
+- Not wired into `DatasetCollector` or any pipeline entrypoint — verified standalone
+  only, same status every extractor has had at this stage of its own milestone. Not
+  persisted, by design — `fuse_evidence` is meant to be called on demand, not written
+  to disk as its own artifact.
+
 ## 2026-07-21 (Milestone 6 — Stage 6: real-world validation, all 6 stages complete)
 
 - Searched three real repositories (`pallets/flask`, `fastapi/fastapi`,

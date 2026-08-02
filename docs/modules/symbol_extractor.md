@@ -2,11 +2,14 @@
 
 `src/semantic/python/symbol_extractor.py`
 
-**Status: all 6 stages complete (Milestone 6, ADR-005).** Called from
+**Status: all 6 stages complete (Milestone 6, ADR-005); extended with per-symbol body
+evidence (Milestone 8.5A, ADR-008).** Called from
 `DatasetCollector._build_commit_semantic_analysis` and validated against real commits
 in `pallets/flask` and `tcx_nogrunt-1` (see `docs/modules/dataset_collector.md` and
 `docs/MILESTONES.md` for the real-world validation detail, including a non-trivial
-rename). Not yet wired into `collect()` — see those docs for what remains.
+rename); the Milestone 8.5A extension separately validated against real commits in
+`pallets/click` (`c2ed414`, `555fa9b` — see `docs/MILESTONES.md`, Milestone 8.5A). Not yet
+wired into `collect()` — see those docs for what remains.
 
 ## Purpose
 
@@ -61,12 +64,20 @@ under `src/utils/`.
     `None` for classes
   - `decorators`: list of decorator source text
   - `docstring`: via `ast.get_docstring`, or `None`
+  - (functions/methods only, Milestone 8.5A) `callees`, `exceptions_raised`,
+    `exceptions_caught`, `context_managers` — raw sets, see Body Evidence below.
+    Classes don't get these keys; `_diff_set_field` treats a missing key as an empty
+    set, so a class's `body_evidence` is always present but always empty.
 
 - `_diff_symbol_tables(old_table, new_table) -> list[dict]` — compares two symbol
   tables by qualified name. Emits one entry per symbol that is `added`, `removed`, or
-  genuinely `modified` (differs in signature, decorators, or docstring); a symbol
-  present and identical on both sides is omitted entirely, matching `change_set`'s own
-  discipline of only reporting what changed.
+  genuinely `modified` (differs in signature, decorators, docstring, **or
+  body_evidence**); a symbol present and identical on both sides is omitted entirely,
+  matching `change_set`'s own discipline of only reporting what changed. Including
+  body-evidence changes in this check is the actual Milestone 8.5A fix — a symbol whose
+  body changed but whose signature/decorators/docstring didn't used to be
+  indistinguishable from an unchanged symbol (both silently omitted); it is now
+  correctly reported as `modified`.
 - `_diff_imports(old_source, new_source) -> dict` — diffs `import`/`from ... import`
   statements at per-imported-name granularity (not whole-statement text), so reordering
   names within one `from X import a, b` line is correctly not flagged as a change.
@@ -76,6 +87,61 @@ under `src/utils/`.
 Never this module's job, per ADR-005: fetching source from git or calling this from
 `DatasetCollector` (Stage 5), symbol rename detection, call-graph resolution,
 cross-commit history, or `__all__`-based visibility.
+
+## Body Evidence (Milestone 8.5A, ADR-008)
+
+Closes "Function Body Blindness" — the #1 finding from the 10-batch reasoning
+evaluation. Four new per-symbol facts, extracted by walking a function/method's own
+`body` statements only (`_iter_own_body`, which recurses via `_walk_excluding_nested_defs`
+and stops at any nested `FunctionDef`/`AsyncFunctionDef`/`ClassDef` — that nested
+symbol gets its own, separate table entry and its own body evidence, never
+double-counted into its enclosing scope):
+
+- **`callees`** (interaction changes) — the text of every `Call` node's target,
+  `ast.unparse(call.func)`, excluding calls used as a `with`-item's expression (those
+  belong to `context_managers`, not double-counted here). No resolution of what the
+  name refers to — `self._exit_stack.__exit__` and an unrelated `__exit__` on a
+  different object are indistinguishable by this fact alone; that's a deliberate
+  ceiling (no call graph), not an oversight.
+- **`exceptions_raised`** / **`exceptions_caught`** (error-handling changes) — the
+  target of every `raise` (unparsed; a bare re-raise with no `exc` contributes
+  nothing) and every `except` clause's type(s) (a `Tuple` is split into individual
+  element names, so `except (ValueError, TypeError):` contributes both names
+  separately, not one composite string).
+- **`context_managers`** (resource-management changes) — every `with`/`async with`
+  item's `context_expr`, unparsed. Reuses the same `ast.unparse`-on-a-call-target
+  mechanism as `callees`, just scoped to `with` headers instead of general call sites.
+
+`_diff_symbol_tables` set-diffs each of these four (same `{"added": [...], "removed":
+[...]}` shape as imports/decorators) plus a fifth, docstring-derived fact —
+**`deprecation_marker_added`** (documentation changes) — true when the new docstring
+contains a fixed marker (`.. deprecated::`, `DeprecationWarning`,
+`PendingDeprecationWarning`) that the old one didn't. All five are nested under a
+per-symbol `body_evidence` key, grouped by reviewer-facing category rather than
+flattened:
+
+```
+"body_evidence": {
+  "interaction_changes": {"callees": {"added": [...], "removed": [...]}},
+  "error_handling_changes": {
+    "exceptions_raised": {"added": [...], "removed": [...]},
+    "exceptions_caught": {"added": [...], "removed": [...]}
+  },
+  "resource_management_changes": {"context_managers": {"added": [...], "removed": [...]}},
+  "documentation_changes": {"deprecation_marker_added": true | false}
+}
+```
+
+A sixth reviewer-facing category, **internal-structure changes** (a new private
+symbol appearing), needed no new extraction here at all — `_diff_symbol_tables`
+already reports newly-added symbols with `visibility: "private"` at any nesting
+depth; surfacing that as its own claim is `src/reasoning/modules/body_evidence.py`'s
+job, not a new field in this schema.
+
+A standalone `warnings.warn()` detector was deliberately not built — it would have
+been one special case of the general `callees` fact, which also explains, for free,
+two other real batch findings (a new `hasattr` check, a new `functools.wraps` call)
+that a bespoke detector would have missed.
 
 ## Internal Workflow
 
@@ -115,3 +181,10 @@ Python stdlib only (`ast`). No dependency on `GitClient`, `DatasetCollector`, or
   `docs/modules/dataset_collector.md`). A real, naturally-occurring `parseable: false`
   case was searched for across three repos' full/sampled history and not found; that
   path remains verified via the hand-constructed cases only.
+- Body evidence (Milestone 8.5A) reasons only about a symbol's own body — a change
+  confined entirely to a *callee's own* implementation produces no signal here, by
+  design; broadening that would require resolving call targets across symbols, which
+  is explicitly out of scope (no call graph, per ADR-008). Verified against two real
+  commits in `pallets/click` (`c2ed414`, `555fa9b` — see `docs/MILESTONES.md`,
+  Milestone 8.5A), plus hand-constructed cases for exception-tuple splitting and
+  deprecation-marker detection.

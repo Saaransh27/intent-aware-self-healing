@@ -157,9 +157,12 @@ class DatasetCollector:
             },
         }
 
-    def _build_commit_file_history(self, repo_path, commit_hash, change_set):
+    def _build_commit_file_history(self, repo_path, commit_hash, change_set, metadata):
+        author_email = metadata["author"]["email"]
         return {
-            file_path: self.git_client.get_file_history(repo_path, commit_hash, file_path)
+            file_path: self.git_client.get_file_history(
+                repo_path, commit_hash, file_path, author_email=author_email
+            )
             for file_path in change_set["changed_files"]
         }
 

@@ -1,6 +1,9 @@
 import ast
 
 
+_DEPRECATION_MARKERS = ("deprecated::", "DeprecationWarning", "PendingDeprecationWarning")
+
+
 def _visibility(name):
     if len(name) > 4 and name.startswith("__") and name.endswith("__"):
         return "public"
@@ -16,6 +19,73 @@ def _scope_path(scope_stack):
 def _qualified_name(scope_stack, name):
     prefix = _scope_path(scope_stack)
     return f"{prefix}.{name}" if prefix else name
+
+
+def _walk_excluding_nested_defs(node):
+    yield node
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        yield from _walk_excluding_nested_defs(child)
+
+
+def _iter_own_body(node):
+    for statement in node.body:
+        yield from _walk_excluding_nested_defs(statement)
+
+
+def _with_item_expr_ids(node):
+    ids = set()
+    for descendant in _iter_own_body(node):
+        if isinstance(descendant, (ast.With, ast.AsyncWith)):
+            for item in descendant.items:
+                ids.add(id(item.context_expr))
+    return ids
+
+
+def _callee_texts(node):
+    skip_ids = _with_item_expr_ids(node)
+    texts = set()
+    for descendant in _iter_own_body(node):
+        if isinstance(descendant, ast.Call) and id(descendant) not in skip_ids:
+            texts.add(ast.unparse(descendant.func))
+    return texts
+
+
+def _context_manager_texts(node):
+    texts = set()
+    for descendant in _iter_own_body(node):
+        if isinstance(descendant, (ast.With, ast.AsyncWith)):
+            for item in descendant.items:
+                texts.add(ast.unparse(item.context_expr))
+    return texts
+
+
+def _raised_exception_texts(node):
+    texts = set()
+    for descendant in _iter_own_body(node):
+        if isinstance(descendant, ast.Raise) and descendant.exc is not None:
+            target = descendant.exc.func if isinstance(descendant.exc, ast.Call) else descendant.exc
+            texts.add(ast.unparse(target))
+    return texts
+
+
+def _caught_exception_texts(node):
+    texts = set()
+    for descendant in _iter_own_body(node):
+        if isinstance(descendant, ast.ExceptHandler) and descendant.type is not None:
+            if isinstance(descendant.type, ast.Tuple):
+                for element in descendant.type.elts:
+                    texts.add(ast.unparse(element))
+            else:
+                texts.add(ast.unparse(descendant.type))
+    return texts
+
+
+def _has_deprecation_marker(docstring):
+    if not docstring:
+        return False
+    return any(marker in docstring for marker in _DEPRECATION_MARKERS)
 
 
 def _record_class(node, scope_stack, table):
@@ -46,6 +116,10 @@ def _record_function(node, scope_stack, table):
         "signature": ast.unparse(node.args),
         "decorators": [ast.unparse(decorator) for decorator in node.decorator_list],
         "docstring": ast.get_docstring(node),
+        "callees": _callee_texts(node),
+        "exceptions_raised": _raised_exception_texts(node),
+        "exceptions_caught": _caught_exception_texts(node),
+        "context_managers": _context_manager_texts(node),
     }
 
 
@@ -84,6 +158,14 @@ def _diff_decorators(old_decorators, new_decorators):
     return added, removed
 
 
+def _diff_set_field(old_facts, new_facts, key):
+    old_values = (old_facts.get(key) if old_facts else None) or set()
+    new_values = (new_facts.get(key) if new_facts else None) or set()
+    added = sorted(new_values - old_values)
+    removed = sorted(old_values - new_values)
+    return added, removed
+
+
 def _diff_symbol_tables(old_table, new_table):
     diffs = []
     for qualified_name in sorted(set(old_table) | set(new_table)):
@@ -103,11 +185,37 @@ def _diff_symbol_tables(old_table, new_table):
         new_docstring = new_facts["docstring"] if new_facts else None
         docstring_status = _diff_docstring(old_docstring, new_docstring)
 
+        callees_added, callees_removed = _diff_set_field(old_facts, new_facts, "callees")
+        exceptions_raised_added, exceptions_raised_removed = _diff_set_field(
+            old_facts, new_facts, "exceptions_raised"
+        )
+        exceptions_caught_added, exceptions_caught_removed = _diff_set_field(
+            old_facts, new_facts, "exceptions_caught"
+        )
+        context_managers_added, context_managers_removed = _diff_set_field(
+            old_facts, new_facts, "context_managers"
+        )
+        deprecation_marker_added = _has_deprecation_marker(new_docstring) and not _has_deprecation_marker(
+            old_docstring
+        )
+
+        body_evidence_changed = bool(
+            callees_added
+            or callees_removed
+            or exceptions_raised_added
+            or exceptions_raised_removed
+            or exceptions_caught_added
+            or exceptions_caught_removed
+            or context_managers_added
+            or context_managers_removed
+            or deprecation_marker_added
+        )
+
         if old_facts is None:
             change_type = "added"
         elif new_facts is None:
             change_type = "removed"
-        elif signature_changed or decorators_changed or docstring_status != "unchanged":
+        elif signature_changed or decorators_changed or docstring_status != "unchanged" or body_evidence_changed:
             change_type = "modified"
         else:
             continue
@@ -124,6 +232,30 @@ def _diff_symbol_tables(old_table, new_table):
             "decorators_changed": decorators_changed,
             "decorators": {"added": decorators_added, "removed": decorators_removed},
             "docstring_status": docstring_status,
+            "body_evidence": {
+                "interaction_changes": {
+                    "callees": {"added": callees_added, "removed": callees_removed},
+                },
+                "error_handling_changes": {
+                    "exceptions_raised": {
+                        "added": exceptions_raised_added,
+                        "removed": exceptions_raised_removed,
+                    },
+                    "exceptions_caught": {
+                        "added": exceptions_caught_added,
+                        "removed": exceptions_caught_removed,
+                    },
+                },
+                "resource_management_changes": {
+                    "context_managers": {
+                        "added": context_managers_added,
+                        "removed": context_managers_removed,
+                    },
+                },
+                "documentation_changes": {
+                    "deprecation_marker_added": deprecation_marker_added,
+                },
+            },
         })
     return diffs
 
