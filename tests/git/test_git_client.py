@@ -68,5 +68,56 @@ class GetFileHistoryFollowTests(unittest.TestCase):
         self.assertFalse(history["is_first_appearance"])
 
 
+class GetCoChangeHistoryFollowTests(unittest.TestCase):
+    """Covers Milestone 22A's release blocker: get_co_change_history must
+    follow renames (git log --follow), the same defect class already fixed
+    in get_file_history, so a renamed file doesn't lose its pre-rename
+    co-change history, while non-renamed files are unaffected."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo_path = Path(self._tmp.name)
+        _run(["init"], self.repo_path)
+        _run(["config", "user.email", "test@example.com"], self.repo_path)
+        _run(["config", "user.name", "Test"], self.repo_path)
+        _run(["config", "commit.gpgsign", "false"], self.repo_path)
+        self.client = GitClient()
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _commit(self, message):
+        _run(["commit", "-m", message], self.repo_path)
+        return self.client.get_commit_hashes(self.repo_path, max_count=1)[0]
+
+    def test_renamed_file_retains_co_change_history_from_before_the_rename(self):
+        (self.repo_path / "old_name.py").write_text("content\n")
+        (self.repo_path / "sibling.py").write_text("content\n")
+        _run(["add", "old_name.py", "sibling.py"], self.repo_path)
+        self._commit("add old_name.py alongside sibling.py")
+
+        _run(["mv", "old_name.py", "new_name.py"], self.repo_path)
+        _run(["add", "-A"], self.repo_path)
+        latest = self._commit("rename to new_name.py")
+
+        co_change = self.client.get_co_change_history(self.repo_path, latest, "new_name.py")
+        changed_paths = {path for commit_files in co_change for path in commit_files}
+        self.assertIn("sibling.py", changed_paths)
+
+    def test_never_renamed_file_co_change_history_is_unchanged(self):
+        (self.repo_path / "stable_name.py").write_text("v1\n")
+        (self.repo_path / "sibling.py").write_text("content\n")
+        _run(["add", "stable_name.py", "sibling.py"], self.repo_path)
+        self._commit("add stable_name.py alongside sibling.py")
+
+        (self.repo_path / "stable_name.py").write_text("v2\n")
+        _run(["add", "stable_name.py"], self.repo_path)
+        latest = self._commit("edit stable_name.py")
+
+        co_change = self.client.get_co_change_history(self.repo_path, latest, "stable_name.py")
+        changed_paths = {path for commit_files in co_change for path in commit_files}
+        self.assertIn("sibling.py", changed_paths)
+
+
 if __name__ == "__main__":
     unittest.main()

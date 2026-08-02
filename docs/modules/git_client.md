@@ -107,8 +107,9 @@ Python stdlib only (`subprocess`). Requires a `git` binary on `PATH`. No depende
 ## Future Improvements
 
 - `run_git_command` has no callers outside this class; should become `_run_git_command`.
-- `get_file_content_at_commit` currently has no caller anywhere in the codebase — added
-  ahead of need, revisit if it stays unused. (`get_changed_files` now has one:
+- `get_file_content_at_commit` is now called from `DatasetCollector.
+  _build_commit_semantic_analysis` (Milestone 6), which fetches old/new file content
+  for symbol extraction. (`get_changed_files` is called from
   `DatasetCollector._build_commit_change_set`.)
 - `clone_repository`'s `shallow` option isn't used by any current caller.
 - No custom exception types yet — errors currently surface as raw

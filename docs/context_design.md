@@ -1,7 +1,10 @@
 # Context Design (Milestone 5A)
 
-**Status: Proposal — not yet implemented.** This document is research + design only. No
-code changes accompany it.
+**Status: Proposal at the time this document was written — since implemented.** This
+document was research + design only when written; the four Context evidence extractors
+it proposes were subsequently built in Milestone 5A and are wired into the production
+pipeline via `src/pipeline/orchestrator.py`'s `_build_evidence`. See `docs/MILESTONES.md`
+(Milestone 5A) and `docs/CURRENT_STATE.md` for their current, implemented state.
 
 ## Starting definition
 

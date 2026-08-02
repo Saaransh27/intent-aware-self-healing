@@ -811,15 +811,64 @@ release-blocking severity. **Verdict: tag as Version 1.**
 A findings-only definition of the product as it exists today: a
 five-section triage review of one git commit (Verdict, What changed and
 why, What deserves attention ranked, Open questions, Minor notes),
-delivered via `POST /review` JSON or the playground's rendered prose nothing
-persisted between requests. Primary user: backend engineers reviewing
-pull requests in Python codebases specifically, since the symbol-level
-semantic evidence (`src/semantic/python/`) only exists for that language.
-Deliberate Version 1 non-goals, per `PROJECT.md` and the repository's own
-"not yet true" statements: no auth/multi-tenancy, no persistence/history,
-no PR- or multi-commit-level review (exactly one commit per request), no
-automatic repair of a rejected response, no provider configuration (one
-model hardcoded), no CI/deployment integration.
+delivered via `POST /review` JSON or the playground's rendered prose;
+nothing persisted between requests. Primary user: backend engineers
+reviewing pull requests in Python codebases specifically, since the
+symbol-level semantic evidence (`src/semantic/python/`) only exists for
+that language. Deliberate Version 1 non-goals, per `PROJECT.md` and the
+repository's own "not yet true" statements: no auth/multi-tenancy, no
+persistence/history, no PR- or multi-commit-level review (exactly one
+commit per request), no automatic repair of a rejected response, no
+provider configuration (one model hardcoded), no CI/deployment
+integration.
+
+## Milestone 22 / 22A — Final Backend Freeze Audit + Fix
+
+A stricter, second release-blocker audit (5 criteria: reproducible,
+real-user-affecting, affects correctness/reliability/availability/data
+integrity, not already an accepted V1 limitation, would justify delaying
+release) found every prior Milestone 18/20 finding already dismissed on
+the record — none resurfaced. Re-verifying Milestone 19's own fix against
+a fresh grep of `src/reasoning/modules/*.py` surfaced one genuinely new
+instance of the same bug class: `GitClient.get_co_change_history` was
+missing `--follow`, the identical defect already fixed in the sibling
+`get_file_history`. Confirmed directly against the real production
+reasoning pipeline on the `rename_reorg` (click) commit: it emitted a
+false `reach.no_historical_coupling` claim at `confidence: "observed"` —
+this project's highest confidence tier.
+
+**Fixed in Milestone 22A**: `get_co_change_history` now passes `--follow`,
+mirroring the Milestone 19 fix exactly. Re-running the real reasoning
+pipeline on the same commit now emits no such claim; `get_co_change_history`
+correctly returns 6 historical entries (was 0). 205 tests total (203 + 2
+new), zero regressions. **The backend is now frozen** — no further
+release blockers open.
+
+## Milestone 23 — Version 1 Product UI
+
+`playground/index.html`'s original Milestone 16A dev-tool styling was
+replaced with the Version 1 shipping interface, split into `index.html`
+(structure), `styles.css` (a neutral, typography-first visual system —
+no gradients, glassmorphism, or animation beyond one loading spinner),
+and `app.js` (vanilla JS, no framework). No backend code changed; the
+endpoint surface and CORS policy are exactly as Milestone 16A left them.
+
+One workflow only: repository URL, optional commit hash, one button, one
+output region cycling through idle/loading/error/result. The five
+sections render in the backend's own exact order and labels; an unparsed
+response is shown as raw text with a plain note, not treated as an error.
+A quiet note appears only when `validation.findings` is genuinely
+non-empty — real backend data. The Review Engine's always-empty
+`findings` field is deliberately not displayed, since showing a counter
+that can only ever read zero would misrepresent it as a working feature.
+All four real HTTP failure modes (404/500/502/504) are mapped to plain-
+language messages; the raw `detail` string is never shown.
+
+Verified end-to-end against the real, running API (not mocked): a
+successful parsed response with no validation findings, a successful
+response with two attached `module_jargon_leak` findings, a real `502`
+contract-violation rejection, and a real `404` for an unresolvable
+repository — all four render correctly. All 205 backend tests still pass.
 
 ## What exists
 
@@ -859,9 +908,10 @@ model hardcoded), no CI/deployment integration.
   splits a model response into ADR-013's five sections outside the Review
   Engine. `src/api/models.py` — the request/response Pydantic schema, now
   including `ValidationResult`/`ValidationFinding` and `ReviewResponse.validation`.
-- `playground/index.html` (Milestone 16A) — a single, dependency-free
-  static HTML/CSS/vanilla-JS page replacing curl/Postman for `POST
-  /review`. Not part of `src/`; no Python code, no build step.
+- `playground/index.html`, `playground/styles.css`, `playground/app.js`
+  (Milestone 16A, restyled as the Version 1 product UI in Milestone 23) —
+  three dependency-free static files (structure/style/behavior) serving
+  `POST /review`. Not part of `src/`; no Python code, no build step.
 - No custom `GitClient` exception types exist — `run_git_command` failures still
   surface as raw `subprocess.CalledProcessError`. (An earlier version of this
   document described a placeholder `src/git/exceptions.py` file; no such file

@@ -1,5 +1,71 @@
 # Changelog
 
+## 2026-08-02 (Milestone 23 — Version 1 Product UI)
+
+- Replaced `playground/index.html`'s original Milestone 16A dev-tool
+  styling with the Version 1 shipping interface, split into
+  `playground/index.html` (structure), `playground/styles.css` (neutral,
+  typography-first visual system — no gradients, glassmorphism, or
+  animation beyond one loading spinner), and `playground/app.js` (vanilla
+  JS). No backend code changed; CORS policy and endpoint surface unchanged
+  from Milestone 16A.
+- One workflow: repository URL, optional commit hash, one Review Commit
+  button, one output region cycling through exactly four states (idle,
+  loading, error, result). Five sections render in the backend's own
+  order/labels; an unparsed response shows as raw text with a plain note,
+  not as an error. A quiet secondary note appears only when
+  `validation.findings` is genuinely non-empty. The Review Engine's
+  always-empty `findings` field is deliberately not displayed.
+- All four real HTTP failure modes (404/500/502/504) mapped to plain-
+  language messages; the raw `detail` string and any stack trace are
+  never shown.
+- Verified end-to-end against the real, running API: a successful parsed
+  response with no validation findings (a real poetry commit); a
+  successful response with two attached `module_jargon_leak` findings (a
+  real fastapi commit); a real `502` contract-violation rejection (a real
+  black commit); and a real `404` for an unresolvable repository path —
+  all four states confirmed rendering correctly. All 205 backend tests
+  still pass (no backend code touched).
+- Updated `playground/README.md` to describe the new file split and
+  Version 1 scope.
+
+## 2026-08-02 (Milestone 22A — Fix the Final Release Blocker)
+
+- Closed the one blocker Milestone 22 identified. `src/git/git_client.py`'s
+  `get_co_change_history` now passes `--follow` to its single `git log`
+  call — the same one-line change already applied to `get_file_history`
+  in Milestone 19.
+- Tests: 2 new in `tests/git/test_git_client.py`
+  (`GetCoChangeHistoryFollowTests`) — a renamed file's co-change history
+  now includes its pre-rename co-committed sibling; a never-renamed
+  file's co-change history is unchanged. 205 tests total (203 + 2 new),
+  zero regressions.
+- Verified against the original reproduction: `get_co_change_history` on
+  the real `rename_reorg` (click) commit now returns 6 historical entries
+  (was 0); re-running the real production reasoning pipeline on the same
+  commit no longer emits `reach.no_historical_coupling` at all.
+- Backend freeze confirmed complete — no further release blockers open.
+
+## 2026-08-02 (Milestone 22 — Final Backend Freeze Audit, verification only)
+
+- Re-applied a stricter 5-criteria release-blocker test (reproducible,
+  real-user-affecting, affects correctness/reliability/availability/data
+  integrity, not already an accepted V1 limitation, would justify
+  delaying release) to every finding from Milestones 18/20 — all failed
+  Criterion 4 (already explicitly dismissed on the record) and did not
+  resurface.
+- Re-verified Milestone 19's `_CLAIM_IDS` fix against a fresh grep of
+  `src/reasoning/modules/*.py` — byte-for-byte identical, no transcription
+  errors.
+- Found one new instance of the same missing-`--follow` defect class in
+  `GitClient.get_co_change_history` (not covered by Milestone 19's fix,
+  which only touched `get_file_history`). Confirmed directly against the
+  real production reasoning pipeline on the `rename_reorg` (click) commit:
+  emitted a false `reach.no_historical_coupling` claim at
+  `confidence: "observed"`.
+- **Verdict: NOT READY.** No code or docs modified in this milestone
+  (audit-only scope) — see Milestone 22A for the fix.
+
 ## 2026-08-02 (Milestone 21 — Product Definition, no code)
 
 - Findings-only pass defining the product as it exists today: what a user

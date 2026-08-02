@@ -2027,3 +2027,101 @@ configuration, no CI integration); the strongest technical differentiator
 is narrowed to triage over fixed evidence rather than free generation from
 a raw diff, backed by a deterministic leak validator); and a 25-word
 GitHub-style description. No future work proposed.
+
+## Milestone 22 — Final Backend Freeze Audit (verification only, no code)
+
+**Status: Complete** (2026-08-02)
+
+A brutally strict re-audit before backend freeze, applying a stricter
+5-criteria test (reproducible; affects a real user; affects correctness,
+reliability, availability, or data integrity; not already documented as an
+accepted V1 limitation; would reasonably justify delaying release) to
+every prior finding from Milestones 18/20. **All of them failed this
+audit's Criterion 4** — each had already been explicitly examined and
+labeled "not a release blocker" with reasoning on record — so none
+resurfaced.
+
+Re-verifying Milestone 19's own fix against its ground truth (a fresh grep
+of `src/reasoning/modules/*.py`, diffed byte-for-byte against
+`_CLAIM_IDS`) surfaced one genuinely new finding: `GitClient.
+get_co_change_history` (`src/git/git_client.py`) has the identical missing-
+`--follow` defect Milestone 19 fixed in the sibling function
+`get_file_history`, but was never touched by that fix. Verified directly
+against the real production reasoning pipeline on the same `rename_reorg`
+(click) commit: `get_co_change_history` returned zero historical entries
+for the renamed file (7 real entries exist when `--follow` is used
+directly), and the reasoning layer emitted a false `reach.
+no_historical_coupling` claim at **`confidence: "observed"`** — this
+project's highest confidence tier, which the prompt's own Evidence
+Precedence rules tell the model outranks its own inference.
+
+**Verdict: NOT READY** — this one finding, meeting all five criteria, was
+reported and not fixed in this milestone (audit-only scope). See
+Milestone 22A for its resolution.
+
+## Milestone 22A — Fix the Final Release Blocker
+
+**Status: Complete** (2026-08-02)
+
+Closed exactly the one blocker Milestone 22 identified, mirroring the
+already-approved fix from Milestone 19. `GitClient.get_co_change_history`
+now passes `--follow` to its single `git log` call — the same one-line
+change already applied to `get_file_history`.
+
+**Tests**: 2 new in `tests/git/test_git_client.py`
+(`GetCoChangeHistoryFollowTests`) — a renamed file's co-change history now
+includes its pre-rename co-committed sibling; a never-renamed file's
+co-change history is unchanged. **205 tests total** (203 + 2 new), zero
+regressions.
+
+**Verified against the original reproduction**: re-ran `get_co_change_history`
+on the real `rename_reorg` commit — now returns 6 historical entries (was
+0), correctly surfacing the real pre-rename co-change partners. Re-ran the
+actual production reasoning pipeline on the same commit: the `reach`
+module no longer emits `reach.no_historical_coupling` at all.
+
+**This completes the backend freeze** — no further release blockers are
+open as of this milestone.
+
+## Milestone 23 — Version 1 Product UI
+
+**Status: Complete** (2026-08-02)
+
+Replaced the Milestone 16A playground's dev-tool-styled single file with
+the Version 1 shipping interface for `POST /review`, split into
+`playground/index.html`, `playground/styles.css`, and `playground/app.js`
+(still no framework, no build step, no dependency of its own). No backend
+code was touched; the CORS policy and endpoint surface are unchanged from
+Milestone 16A.
+
+**Single workflow, exactly as scoped**: Repository URL, optional commit
+hash, one Review Commit button, one output region cycling through exactly
+four states (idle, loading, error, result) — nothing else. The five
+review sections render in the backend's own exact order and labels
+(`src/api/response_parser.py`'s `SECTION_KEYS`); an unparsed response is
+shown honestly as raw text with a plain note, not hidden or treated as an
+error (the API itself returns `200` for it). A quiet secondary note
+appears only when the Response Validation Layer attaches a real,
+non-rejecting finding (`validation.findings`) — genuine backend data, not
+invented UI. The Review Engine's `findings` field is deliberately **not
+displayed**: it is always `[]` by design (ADR-016's category-1 catalogue
+doesn't exist), and rendering a counter that can only ever read zero would
+misrepresent it as a working feature.
+
+**Error handling**: the four real HTTP failure modes the API can return
+(404 unresolvable commit, 500 invalid prompt, 502 no usable/contract-
+violating response, 504 timeout) are each mapped to one calm, specific
+sentence. The raw `detail` string and any stack trace are never shown to
+the user.
+
+**Verified end-to-end against the real, running API** (not mocked): a
+successful parsed response with no validation findings (poetry commit); a
+successful response with two attached `module_jargon_leak` validation
+findings, confirming the secondary-note rendering; a real `502` contract-
+violation rejection; and a real `404` for an unresolvable repository —
+all four states confirmed rendering correctly against live responses. All
+205 backend tests still pass (no backend code changed).
+
+**Not part of Version 1, deliberately**: history/persistence of past
+reviews, comparing commits, feedback capture, dark mode, or any workflow
+beyond the one above — consistent with Milestone 21's defined non-goals.

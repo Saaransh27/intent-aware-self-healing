@@ -157,7 +157,7 @@ class GitClient:
 
     def get_co_change_history(self, repo_path, commit_hash, file_path, max_history=50):
         output = self.run_git_command(
-            ["log", commit_hash, f"--max-count={max_history + 1}", "--format=%H", "--", file_path],
+            ["log", commit_hash, "--follow", f"--max-count={max_history + 1}", "--format=%H", "--", file_path],
             cwd=repo_path,
         )
         historical_hashes = output.splitlines()[1:]
