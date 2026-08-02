@@ -870,6 +870,22 @@ response with two attached `module_jargon_leak` findings, a real `502`
 contract-violation rejection, and a real `404` for an unresolvable
 repository — all four render correctly. All 205 backend tests still pass.
 
+## Milestone 24 / 24A — Version 1 Deployment (Vercel + Railway)
+
+Planning (24) confirmed no backend code references `localhost`, the API
+request path writes nothing to disk beyond an ephemeral per-request
+`tempfile.TemporaryDirectory()`, and `GitClient` only ever performs
+read-only git operations. Implementation (24A) added three small,
+deployment-only files without touching backend functionality:
+`playground/config.js` (the frontend's API base URL, previously hardcoded
+in `app.js`, now lives here as `window.API_BASE_URL`), `Procfile` (repo
+root — `uvicorn src.api.app:app --host 0.0.0.0 --port $PORT`, required
+for Railway to bind reachably), and `.env.example` (documents
+`SHAKTI_API_KEY` as required, `GEMINI_API_KEY` as not required for
+deployment). All 205 backend tests still pass; the config wiring and all
+four response states (success, validation-flagged, 404, 502) were
+re-verified against the real API.
+
 ## What exists
 
 - `src/git/git_client.py` — `GitClient`, full git-plumbing layer. See
@@ -908,10 +924,16 @@ repository — all four render correctly. All 205 backend tests still pass.
   splits a model response into ADR-013's five sections outside the Review
   Engine. `src/api/models.py` — the request/response Pydantic schema, now
   including `ValidationResult`/`ValidationFinding` and `ReviewResponse.validation`.
-- `playground/index.html`, `playground/styles.css`, `playground/app.js`
-  (Milestone 16A, restyled as the Version 1 product UI in Milestone 23) —
-  three dependency-free static files (structure/style/behavior) serving
-  `POST /review`. Not part of `src/`; no Python code, no build step.
+- `playground/index.html`, `playground/styles.css`, `playground/app.js`,
+  `playground/config.js` (Milestone 16A, restyled as the Version 1 product
+  UI in Milestone 23, made deployment-configurable in Milestone 24A) —
+  four dependency-free static files (structure/style/behavior/deployment
+  config) serving `POST /review`. Not part of `src/`; no Python code, no
+  build step.
+- `Procfile`, `.env.example` (Milestone 24A) — repo-root deployment
+  configuration for Railway. `Procfile` sets the start command
+  (`--host 0.0.0.0 --port $PORT`); `.env.example` documents required
+  environment variables with no real values.
 - No custom `GitClient` exception types exist — `run_git_command` failures still
   surface as raw `subprocess.CalledProcessError`. (An earlier version of this
   document described a placeholder `src/git/exceptions.py` file; no such file

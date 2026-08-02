@@ -18,6 +18,10 @@ shipping Version 1 interface for `POST /review` (Milestone 14B).
 - `index.html` — structure: the form and the single output region.
 - `styles.css` — the visual system (neutral palette, typography-first,
   no gradients/glassmorphism/animation beyond one loading indicator).
+- `config.js` (Milestone 24A) — sets `window.API_BASE_URL`, loaded before
+  `app.js`. Deploying this frontend against a backend running somewhere
+  other than `http://localhost:8000` (e.g. a Railway deployment) is a
+  one-line edit to this file only — no other file needs to change.
 - `app.js` — vanilla JS: submits the form, renders exactly one of four
   states (idle, loading, error, result), and maps the API's real HTTP
   status codes (404/500/502/504) to plain-language messages. Never

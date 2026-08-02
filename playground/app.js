@@ -2,7 +2,7 @@
 // Talks only to the existing POST /review and GET /health endpoints.
 // No framework, no build step, no persistence.
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = window.API_BASE_URL;
 const REQUEST_TIMEOUT_MESSAGE = "This is taking longer than expected and the request timed out.";
 
 // Backend section keys (src/api/response_parser.py SECTION_KEYS), in order.

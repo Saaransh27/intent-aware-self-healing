@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-08-02 (Milestone 24A — Version 1 Deployment Implementation)
+
+- Moved the frontend's API base URL out of `app.js` into a new
+  `playground/config.js` (`window.API_BASE_URL`), loaded before `app.js`
+  in `index.html`. No deployment URL is hardcoded into the repository;
+  pointing the frontend at a deployed backend is a one-line edit to this
+  one file.
+- Added `Procfile` (repo root): `web: uvicorn src.api.app:app --host
+  0.0.0.0 --port $PORT` — required for Railway to bind reachably; the
+  previously-documented run command binds to `127.0.0.1` by default.
+- Added `.env.example` (repo root): documents `SHAKTI_API_KEY` (required)
+  and `GEMINI_API_KEY` (not required for deployment), no real values.
+- No backend functionality changed. Verified: all 205 backend tests still
+  pass; the `config.js`/`app.js` wiring verified directly (Node harness);
+  all four response states (success, validation-flagged, 404, 502)
+  re-confirmed against the real API. `.env` confirmed still gitignored.
+
+## 2026-08-02 (Milestone 24 — Version 1 Deployment Planning, no code)
+
+- Findings-only deployment plan for Vercel (frontend) + Railway (backend).
+  Confirmed no backend code references `localhost`; the request path
+  writes nothing to disk beyond an ephemeral `tempfile.TemporaryDirectory()`
+  per request; `GitClient` only performs read-only git operations. No
+  architectural blockers found — see Milestone 24A for the implementation.
+
 ## 2026-08-02 (Milestone 23 — Version 1 Product UI)
 
 - Replaced `playground/index.html`'s original Milestone 16A dev-tool

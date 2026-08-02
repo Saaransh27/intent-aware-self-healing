@@ -2125,3 +2125,62 @@ all four states confirmed rendering correctly against live responses. All
 **Not part of Version 1, deliberately**: history/persistence of past
 reviews, comparing commits, feedback capture, dark mode, or any workflow
 beyond the one above — consistent with Milestone 21's defined non-goals.
+
+## Milestone 24 — Version 1 Deployment Planning (no code)
+
+**Status: Complete** (2026-08-02)
+
+A findings-only deployment plan for Vercel (frontend, static) + Railway
+(backend, single FastAPI service) for a 3-10-person trusted-tester
+audience. Verified directly from the code, not assumed: no backend code
+references `localhost`; the only local-execution assumption anywhere is
+`playground/app.js`'s hardcoded API URL; the API path
+(`run_pipeline_for_commit`) writes nothing to disk beyond an ephemeral
+`tempfile.TemporaryDirectory()` per request; `GitClient` only ever shells
+out to read-only `git` operations (clone/log/diff/show), never `commit`,
+so no git identity configuration is needed; `requirements.txt` pulls in
+`certifi` transitively via `httpx`. Identified two deploy-configuration
+requirements that need no code change (start command must bind
+`--host 0.0.0.0 --port $PORT`; `SHAKTI_API_KEY` must be set — `GEMINI_API_KEY`
+is not needed, since only `run_full_pipeline.py`, not the deployed API,
+uses it) and one expected small edit before deploying (the frontend's API
+URL). No blockers requiring architecture changes were found.
+
+## Milestone 24A — Version 1 Deployment Implementation
+
+**Status: Complete** (2026-08-02)
+
+Implemented the approved Milestone 24 plan with the smallest possible set
+of changes — no backend functionality touched.
+
+- **`playground/config.js`** (new) — the frontend's API base URL moved out
+  of `app.js` into its own small file (`window.API_BASE_URL`, committed
+  with a local-dev default), so pointing the frontend at a deployed
+  backend is a one-line edit to a dedicated config file rather than a
+  change buried in application logic, and no real deployment URL is
+  hardcoded into the repository.
+- **`playground/index.html`** — loads `config.js` before `app.js`.
+- **`playground/app.js`** — reads `window.API_BASE_URL` instead of its own
+  hardcoded constant. No other logic changed.
+- **`Procfile`** (new, repo root) — `web: uvicorn src.api.app:app --host
+  0.0.0.0 --port $PORT`, the minimal, standard file Railway needs to bind
+  correctly; without it the previously-documented run command
+  (`uvicorn src.api.app:app --reload`) would bind to `127.0.0.1` and be
+  unreachable.
+- **`.env.example`** (new, repo root) — documents `SHAKTI_API_KEY`
+  (required) and `GEMINI_API_KEY` (not required for deployment), no real
+  values.
+
+**Verified**: all 205 backend tests still pass (no backend code changed).
+The `config.js` → `app.js` wiring was verified directly (a Node harness
+loading both files in the same scope and triggering a simulated form
+submission confirmed the real fetch call uses the configured URL).
+Re-confirmed against the real, running backend: a successful parsed
+review, a response with real attached `module_jargon_leak` validation
+findings, and a real `404` for an unresolvable repository. The `502`
+contract-violation path was re-confirmed deterministically (the error-
+handling code is unchanged from Milestone 23, where it was already
+verified against a real `502`) rather than by chasing GPT-OSS-120B's
+already-established stochastic leak behavior for a fresh one. `.env`
+confirmed still gitignored; `.env.example` confirmed to contain no real
+values.
