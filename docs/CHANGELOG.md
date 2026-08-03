@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-08-03 (Milestone 25 — Version 1 Deployment, live)
+
+- Deployed the backend. **Railway was attempted first and abandoned**:
+  the service built and ran correctly (confirmed clean `Uvicorn running
+  on http://0.0.0.0:$PORT` startup), but every real `POST /review`
+  request failed with `404 could not clone repository` on a plain
+  public repo URL that cloned instantly on a local machine. Tested and
+  ruled out both leading hypotheses directly via Railway's own build
+  logs: `git` and `ca-certificates` were both already present in the
+  build image. Could not isolate the true cause further — Railway does
+  not provide a way to get a shell inside the actual running container
+  (confirmed: `railway shell`/`railway run` execute locally with the
+  project's env vars injected, not inside the deployed container).
+- Deployed to **Render** instead with the same code, same
+  `SHAKTI_API_KEY`, same start command — worked correctly on the first
+  real request. Live at `https://intent-aware-self-healing.onrender.com`.
+- Deployed the frontend to **Vercel** (Root Directory `playground/`,
+  Framework Preset "Other," no build step). Live at
+  `https://intent-aware-self-healing.vercel.app/`.
+- Updated `playground/config.js`'s `API_BASE_URL` to the Render URL
+  (confirmed with the user before editing; committed and pushed as its
+  own commit, separate from this milestone's other work).
+- Verified end-to-end through the actual live, deployed UI: a real
+  repository submitted through the Vercel frontend produced a complete,
+  correctly rendered review from the Render backend.
+- The `Procfile` (Milestone 24A) is unused by the current deployment
+  (Render's start command is set directly in its dashboard) but left in
+  place. The Railway project was left running, not deleted.
+
 ## 2026-08-02 (Milestone 24A — Version 1 Deployment Implementation)
 
 - Moved the frontend's API base URL out of `app.js` into a new

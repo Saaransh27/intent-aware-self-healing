@@ -2184,3 +2184,63 @@ verified against a real `502`) rather than by chasing GPT-OSS-120B's
 already-established stochastic leak behavior for a fresh one. `.env`
 confirmed still gitignored; `.env.example` confirmed to contain no real
 values.
+
+## Milestone 25 — Version 1 Deployment (live)
+
+**Status: Complete** (2026-08-03). **The backend is deployed to Render,
+not Railway** — Railway was attempted first and abandoned after a real,
+unresolved blocker; see below for exactly what was tried.
+
+**Railway attempt**: the project built and started correctly (Nixpacks-
+successor "Railpack" builder, `Procfile` correctly detected and used,
+clean `Uvicorn running on http://0.0.0.0:$PORT` startup), and the
+`SHAKTI_API_KEY` environment variable was set. Every real `POST /review`
+request nonetheless failed with `404 could not clone repository` on a
+plain, valid public repo URL that cloned instantly from a local machine.
+Diagnosed methodically, not guessed: added `git` and then `ca-certificates`
+via Railway's Custom Build Command (`apt-get install -y ...`) to test the
+two most likely missing-system-package explanations — the build logs
+showed **both were already present** (`git is already the newest version`,
+`ca-certificates is already the newest version`), ruling out both
+hypotheses with direct evidence. Railway provides no shell/exec access
+into the actual running container (`railway shell`/`railway run` execute
+*locally* with the project's environment variables injected, not inside
+the deployed container — confirmed directly: a `git clone` run "inside"
+one showed the local Mac's own git version and hostname, not the
+container's), so the true root cause — most likely a difference between
+build-time and runtime network access inside Railway's container, though
+never conclusively confirmed — could not be isolated further without
+either shell access Railway doesn't offer or a code change to log the
+underlying exception, which this milestone's scope excluded. **Decision:
+abandon Railway, deploy to Render instead**, rather than keep guessing
+at an unreachable root cause.
+
+**Render deployment**: built and started cleanly on the first attempt
+(`pip install -r requirements.txt` via Render's dashboard-configured
+Build Command; Start Command `uvicorn src.api.app:app --host 0.0.0.0
+--port $PORT` set directly in Render's dashboard, same command the
+`Procfile` already specified, not auto-read from it this time).
+`SHAKTI_API_KEY` set as an environment variable. `GET /health` and a
+real `POST /review` (repository cloned, full evidence pipeline run, real
+model call, clean validation) both succeeded on the first real request —
+confirming git/network access work correctly on Render where they did
+not on Railway. Live at `https://intent-aware-self-healing.onrender.com`.
+
+**Frontend deployed to Vercel** exactly as planned in Milestone 24:
+Root Directory set to `playground/`, Framework Preset "Other" (no
+build step), deployed successfully. Live at
+`https://intent-aware-self-healing.vercel.app/`. `playground/config.js`'s
+`API_BASE_URL` updated from its local-dev default to the Render URL
+above (one-line change, confirmed with the user before committing,
+committed and pushed separately from this milestone's other work).
+Verified end-to-end through the actual deployed UI, browser to browser:
+a real repository URL submitted through the live Vercel frontend
+produced a complete, correctly rendered review from the live Render
+backend.
+
+**Not yet true, per `PROJECT.md` rule 4**: the `Procfile` added in
+Milestone 24A is unused by the current deployment (Render's dashboard
+commands are configured independently of it) but left in place — it's
+harmless, and still correct if this project is ever redeployed to a
+Procfile-respecting platform. The Railway project itself was left
+running, not deleted, in case it's revisited.

@@ -886,6 +886,35 @@ deployment). All 205 backend tests still pass; the config wiring and all
 four response states (success, validation-flagged, 404, 502) were
 re-verified against the real API.
 
+## Milestone 25 — Version 1 Deployment (live)
+
+**The product is live.** Backend: `https://intent-aware-self-healing.onrender.com`
+(**Render, not Railway**). Frontend: `https://intent-aware-self-healing.vercel.app/`.
+
+Railway was tried first and abandoned: the service built and started
+correctly, but every real `POST /review` failed with `404 could not
+clone repository` on a plain public repo URL that cloned instantly
+locally. Directly tested and ruled out both leading hypotheses — `git`
+and `ca-certificates` were both already present in Railway's build
+image (confirmed via its own build logs after explicitly installing
+them) — without being able to isolate the true cause further, since
+Railway provides no way to get a shell inside the actual running
+container (`railway shell`/`railway run` execute locally, not remotely
+— confirmed directly). Render worked correctly on the first real
+request with the same code, same environment variable, same start
+command.
+
+`playground/config.js` now points at the Render URL (updated, committed,
+and pushed separately, with explicit confirmation before the edit).
+Verified end-to-end through the live, deployed UI itself (not just
+`curl`): a real repository submitted through the Vercel frontend
+produced a complete, correctly rendered review from the Render backend.
+
+The `Procfile` (Milestone 24A) is unused by the current deployment
+(Render's start command is configured directly in its dashboard) but
+left in place, harmless, and still correct if ever needed again. The
+Railway project was left running, not deleted.
+
 ## What exists
 
 - `src/git/git_client.py` — `GitClient`, full git-plumbing layer. See
