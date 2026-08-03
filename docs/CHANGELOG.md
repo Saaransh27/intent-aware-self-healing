@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-08-03 (Milestone 25A — Review Presentation Polish)
+
+- `playground/app.js`: added `renderMarkdownLite`/`renderInlineMarkdown` —
+  renders the model's actual markdown (bold, inline code, ordered/
+  unordered lists) instead of showing literal asterisks/dashes, the
+  concrete cause of review output looking like a raw `.md` file. Escapes
+  raw text first; only ever wraps the escaped output in fixed, hardcoded
+  tags, so model text can never inject an arbitrary tag. Verified with a
+  direct XSS-style test — caught and fixed a flaw in the test's own DOM
+  stub (didn't replicate real browser escaping) before trusting the
+  result. The raw/unparsed-response fallback is untouched, still shown
+  as-received.
+- `playground/styles.css`: each of the five review sections is now its
+  own light-blue-tinted card with soft elevation and a blue left accent
+  border; Verdict given slightly more visual weight as the headline
+  summary. Page background, form, and metadata strip shifted to match.
+  Still within Milestone 23's constraint — no gradients, glassmorphism,
+  or animation beyond the existing spinner.
+- Verified against real saved API responses run through the actual
+  `renderResult` function (a clean success, and a response with two real
+  attached validation findings). All 205 backend tests still pass
+  (frontend-only change).
+
 ## 2026-08-03 (Milestone 25 — Version 1 Deployment, live)
 
 - Deployed the backend. **Railway was attempted first and abandoned**:

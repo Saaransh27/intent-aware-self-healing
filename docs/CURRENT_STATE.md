@@ -915,6 +915,21 @@ The `Procfile` (Milestone 24A) is unused by the current deployment
 left in place, harmless, and still correct if ever needed again. The
 Railway project was left running, not deleted.
 
+## Milestone 25A — Review Presentation Polish
+
+Frontend-only, no backend changes. `playground/app.js` now actually
+renders the model's markdown (bold, inline code, ordered/unordered
+lists) instead of showing literal asterisks/dashes — the concrete cause
+of the review output looking unfinished. Escapes raw text first, then
+only ever wraps the escaped output in fixed, hardcoded tags, so the
+model's text can never inject an arbitrary tag; verified directly with
+an XSS-style input. `playground/styles.css` redesigned each of the five
+sections as its own light-blue-tinted card with soft elevation and a
+blue accent border (Verdict slightly more prominent), still within
+Milestone 23's no-gradients/no-glassmorphism/no-flashy-animation
+constraint. Verified against real saved API responses run through the
+actual rendering function. All 205 backend tests still pass.
+
 ## What exists
 
 - `src/git/git_client.py` — `GitClient`, full git-plumbing layer. See

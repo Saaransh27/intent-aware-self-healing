@@ -2244,3 +2244,51 @@ commands are configured independently of it) but left in place — it's
 harmless, and still correct if this project is ever redeployed to a
 Procfile-respecting platform. The Railway project itself was left
 running, not deleted, in case it's revisited.
+
+## Milestone 25A — Review Presentation Polish
+
+**Status: Complete** (2026-08-03)
+
+Frontend-only visual and rendering polish, no backend changes. Two real
+problems fixed, not decoration for its own sake:
+
+**Markdown was never actually rendered.** The model's real output uses
+`**bold**`, numbered/bulleted lists, and inline `` `code` `` — the UI was
+showing all of it as literal asterisks and dashes, which was the specific,
+concrete cause of the "looks like a raw .md file" complaint. `playground/
+app.js` gained `renderMarkdownLite(rawText)`, a small, dependency-free
+renderer for exactly this subset (bold, inline code, ordered/unordered
+lists, paragraphs) — deliberately not a general markdown library, since
+this is the only subset the model actually produces. **Security-critical
+design, verified directly**: the raw text is HTML-escaped *first*
+(`escapeHtml`, unchanged), and only the already-escaped output is then
+wrapped in fixed, hardcoded tags (`<strong>`, `<code>`, `<ul>/<ol>/<li>`,
+`<p>`) — the model's text can never inject an arbitrary tag. Verified
+with a direct XSS test (`<script>alert(1)</script>` input) confirming it
+renders as inert escaped text, not a live tag; a flaw in the first version
+of that same test (a hand-written DOM stub that didn't replicate real
+browser escaping) was caught and fixed before trusting the result. The raw/
+unparsed-response fallback path is deliberately untouched — it still shows
+exactly what came back, unprocessed, consistent with its own honesty
+requirement.
+
+**Visual redesign**: `playground/styles.css` moved from plain
+hairline-separated sections to a light-blue-tinted, Google/Microsoft-
+admin-console register — each of the five sections is now its own card
+(pale blue background, soft elevation shadow, a blue left-accent border),
+with the Verdict section given slightly more visual weight (thicker
+accent, deeper shadow, slightly larger body text) since it's the
+headline summary. Page background, form, and metadata strip all shifted
+to the same cool-blue-tinted palette. Explicitly still within Milestone
+23's original constraint — no gradients, glassmorphism, neon, or
+animation beyond the existing loading spinner; the polish is elevation
+and color-as-hierarchy, not decoration.
+
+**Verified**: real saved API responses (a clean success, and a response
+with two real attached validation findings) run through the actual
+`renderResult` function via a Node harness — confirmed lists, bold, and
+inline code all render as real HTML with correctly escaped content
+(including literal `<`/`>` characters inside version specifiers in real
+review text), the Verdict section gets its distinct class, and the
+validation note still renders correctly. All 205 backend tests still
+pass (frontend-only change).

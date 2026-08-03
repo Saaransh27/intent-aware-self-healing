@@ -1,25 +1,32 @@
-/* Commit Review — Version 1 product UI (Milestone 23).
-   Restrained, neutral, typography-first. No gradients, no shadows-as-decoration,
-   no animation beyond a single loading indicator. */
+/* Commit Review — Version 1 product UI (Milestone 23, restyled Milestone 25A).
+   Restrained, professional-dashboard register (Google Workspace admin /
+   Microsoft 365 admin console) — light blue-tinted surfaces and soft
+   elevation for hierarchy, not gradients, glassmorphism, or animation
+   beyond a single loading indicator. Typography still carries the content;
+   color and elevation carry structure. */
 
 :root {
-  --color-bg: #f6f7f8;
+  --color-bg: #eef3fa;
   --color-surface: #ffffff;
-  --color-border: #d0d7de;
+  --color-section-bg: #eef5fd;
+  --color-verdict-bg: #e3edfc;
+  --color-border: #d7e3f3;
   --color-text: #1f2328;
-  --color-text-secondary: #59636e;
-  --color-text-muted: #818b94;
-  --color-accent: #0969da;
-  --color-accent-hover: #0757ba;
-  --color-danger: #cf222e;
-  --color-danger-bg: #fff1f0;
-  --color-danger-border: #ffc1bc;
-  --color-note-bg: #f6f8fa;
+  --color-text-secondary: #4b5768;
+  --color-text-muted: #7c8aa0;
+  --color-accent: #1a73e8;
+  --color-accent-hover: #1558b0;
+  --color-danger: #c5221f;
+  --color-danger-bg: #fce8e6;
+  --color-danger-border: #f6c6c3;
+  --color-note-bg: #f0f4f9;
 
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  --radius: 6px;
+  --radius: 8px;
+  --shadow-elevation-1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --shadow-elevation-2: 0 2px 4px rgba(16, 24, 40, 0.05), 0 4px 10px rgba(16, 24, 40, 0.08);
 }
 
 * {
@@ -65,7 +72,8 @@ body {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  padding: 20px;
+  box-shadow: var(--shadow-elevation-1);
+  padding: 24px;
   margin-bottom: 32px;
 }
 
@@ -128,7 +136,7 @@ input[type="text"]:focus {
 }
 
 button[type="submit"] {
-  padding: 8px 16px;
+  padding: 9px 18px;
   font-size: 14px;
   font-weight: 600;
   font-family: var(--font-ui);
@@ -136,8 +144,10 @@ button[type="submit"] {
   background: var(--color-accent);
   border: 1px solid transparent;
   border-radius: var(--radius);
+  box-shadow: var(--shadow-elevation-1);
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color 0.12s ease;
 }
 
 button[type="submit"]:hover:not(:disabled) {
@@ -224,12 +234,15 @@ button[type="submit"]:disabled {
 .result-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  gap: 4px 20px;
   font-size: 13px;
   color: var(--color-text-secondary);
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-elevation-1);
+  padding: 12px 16px;
+  margin-bottom: 20px;
 }
 
 .result-meta .meta-label {
@@ -242,28 +255,76 @@ button[type="submit"]:disabled {
 }
 
 .review-section {
-  padding: 20px 0;
-  border-bottom: 1px solid var(--color-border);
+  background: var(--color-section-bg);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-elevation-1);
+  padding: 20px 24px;
+  margin-bottom: 16px;
 }
 
 .review-section:last-of-type {
-  border-bottom: none;
+  margin-bottom: 0;
 }
 
 .review-section h2 {
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0 0 8px;
-  letter-spacing: -0.005em;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent-hover);
+  margin: 0 0 12px;
 }
 
 .review-section .section-body {
-  margin: 0;
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.6;
-  white-space: pre-wrap;
   color: var(--color-text);
+}
+
+.review-section .section-body p {
+  margin: 0 0 12px;
+}
+
+.review-section .section-body p:last-child {
+  margin-bottom: 0;
+}
+
+.review-section .section-body ul,
+.review-section .section-body ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+
+.review-section .section-body li {
+  margin-bottom: 6px;
+}
+
+.review-section .section-body li:last-child {
+  margin-bottom: 0;
+}
+
+.review-section .section-body code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: rgba(26, 115, 232, 0.08);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+/* Verdict — the headline summary, given a touch more visual weight than
+   the other four sections, the same way a status card leads a dashboard. */
+.review-section-verdict {
+  background: var(--color-verdict-bg);
+  border-left-width: 4px;
+  box-shadow: var(--shadow-elevation-2);
+}
+
+.review-section-verdict .section-body {
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .raw-response .section-body {
@@ -273,6 +334,7 @@ button[type="submit"]:disabled {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   padding: 12px;
+  white-space: pre-wrap;
 }
 
 .raw-response-note {

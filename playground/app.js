@@ -43,6 +43,78 @@ function escapeHtml(value) {
   return div.innerHTML;
 }
 
+// Renders the small, predictable subset of markdown the model actually
+// produces (bold, inline code, bulleted/numbered lists, paragraphs) as
+// safe HTML. Escapes the raw text FIRST, then only ever introduces our
+// own fixed tags around the already-escaped content — the model's text
+// can never inject an arbitrary tag.
+function renderInlineMarkdown(escapedText) {
+  return escapedText
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+?)`/g, "<code>$1</code>");
+}
+
+function renderMarkdownLite(rawText) {
+  if (!rawText || !rawText.trim()) {
+    return "";
+  }
+
+  const lines = escapeHtml(rawText).split("\n");
+  const blocks = [];
+  let currentList = null;
+  let currentParagraph = [];
+
+  function flushParagraph() {
+    if (currentParagraph.length) {
+      blocks.push(`<p>${renderInlineMarkdown(currentParagraph.join(" ").trim())}</p>`);
+      currentParagraph = [];
+    }
+  }
+
+  function flushList() {
+    if (currentList) {
+      const items = currentList.items.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("");
+      blocks.push(`<${currentList.tag}>${items}</${currentList.tag}>`);
+      currentList = null;
+    }
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+
+    const bulletMatch = line.match(/^[-*]\s+(.*)$/);
+    const numberedMatch = line.match(/^\d+\.\s+(.*)$/);
+
+    if (bulletMatch) {
+      flushParagraph();
+      if (!currentList || currentList.tag !== "ul") {
+        flushList();
+        currentList = { tag: "ul", items: [] };
+      }
+      currentList.items.push(bulletMatch[1]);
+    } else if (numberedMatch) {
+      flushParagraph();
+      if (!currentList || currentList.tag !== "ol") {
+        flushList();
+        currentList = { tag: "ol", items: [] };
+      }
+      currentList.items.push(numberedMatch[1]);
+    } else {
+      flushList();
+      currentParagraph.push(line);
+    }
+  }
+  flushParagraph();
+  flushList();
+
+  return blocks.join("");
+}
+
 function renderIdle() {
   output.innerHTML = `<p class="idle-hint">Enter a repository URL and click Review Commit to get started.</p>`;
 }
@@ -76,9 +148,9 @@ function renderResult(body) {
   let bodyHtml;
   if (body.review.parsed && body.review.sections) {
     bodyHtml = SECTIONS.map(([key, label]) => `
-      <section class="review-section">
+      <section class="review-section${key === "verdict" ? " review-section-verdict" : ""}">
         <h2>${escapeHtml(label)}</h2>
-        <p class="section-body">${escapeHtml(body.review.sections[key] || "")}</p>
+        <div class="section-body">${renderMarkdownLite(body.review.sections[key] || "")}</div>
       </section>
     `).join("");
   } else {
