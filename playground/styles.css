@@ -1,32 +1,44 @@
-/* Commit Review — Version 1 product UI (Milestone 23, restyled Milestone 25A).
-   Restrained, professional-dashboard register (Google Workspace admin /
-   Microsoft 365 admin console) — light blue-tinted surfaces and soft
-   elevation for hierarchy, not gradients, glassmorphism, or animation
-   beyond a single loading indicator. Typography still carries the content;
-   color and elevation carry structure. */
+/* Commit Review — a commit-triage workspace: Overview, Review Checklist,
+   Changed Files, Unknowns / Limitations, Technical Details. No bordered
+   cards anywhere in the results view — hierarchy comes from type scale,
+   weight, and spacing alone (a hairline divider separates stages,
+   nothing else). One accent color, used only on interactive elements
+   (buttons, checkboxes, jump-nav links, disclosure carets), never as a
+   structural border. No gradients, no glassmorphism, no animation beyond
+   the existing loading shimmer/spinner. System fonts only. */
 
 :root {
-  --color-bg: #eef3fa;
+  --color-bg: #f6f7f9;
   --color-surface: #ffffff;
-  --color-section-bg: #eef5fd;
-  --color-verdict-bg: #e3edfc;
-  --color-border: #d7e3f3;
-  --color-text: #1f2328;
-  --color-text-secondary: #4b5768;
-  --color-text-muted: #7c8aa0;
+  --color-border: #e3e7ed;
+  --color-border-strong: #d3d9e3;
+
+  --color-text: #10162b;
+  --color-text-secondary: #48546b;
+  --color-text-muted: #8791a3;
+
   --color-accent: #1a73e8;
   --color-accent-hover: #1558b0;
+  --color-accent-tint: rgba(26, 115, 232, 0.08);
+
   --color-danger: #c5221f;
-  --color-danger-bg: #fce8e6;
+  --color-danger-bg: #fdeceb;
   --color-danger-border: #f6c6c3;
-  --color-note-bg: #f0f4f9;
 
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  --radius-sm: 6px;
   --radius: 8px;
-  --shadow-elevation-1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.08);
-  --shadow-elevation-2: 0 2px 4px rgba(16, 24, 40, 0.05), 0 4px 10px rgba(16, 24, 40, 0.08);
+
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.07);
 }
 
 * {
@@ -38,32 +50,79 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-.page {
-  max-width: 760px;
+/* App bar */
+
+.app-bar {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.app-bar-inner {
+  max-width: 780px;
   margin: 0 auto;
-  padding: 48px 24px 96px;
+  padding: var(--space-2) var(--space-5);
+  display: flex;
+  align-items: center;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.brand-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+/* Page */
+
+.page {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-5) var(--space-6);
 }
 
 .page-header {
-  margin-bottom: 32px;
+  margin-bottom: var(--space-4);
 }
 
 .page-header h1 {
-  font-size: 20px;
-  font-weight: 600;
-  margin: 0 0 4px;
-  letter-spacing: -0.01em;
+  font-size: 19px;
+  font-weight: 700;
+  margin: 0 0 2px;
+  letter-spacing: -0.015em;
+  color: var(--color-text);
 }
 
 .subtitle {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 14px;
+  font-size: 12px;
 }
 
 /* Form */
@@ -72,9 +131,9 @@ body {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-elevation-1);
-  padding: 24px;
-  margin-bottom: 32px;
+  box-shadow: var(--shadow-1);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
 }
 
 .field {
@@ -84,12 +143,12 @@ body {
 
 .field + .field,
 .field-row {
-  margin-top: 16px;
+  margin-top: var(--space-3);
 }
 
 .field-row {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: flex-end;
 }
 
@@ -103,9 +162,9 @@ body {
 }
 
 label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-1);
   color: var(--color-text);
 }
 
@@ -117,12 +176,13 @@ label {
 input[type="text"] {
   width: 100%;
   padding: 8px 10px;
-  font-size: 14px;
+  font-size: 13px;
   font-family: var(--font-ui);
   color: var(--color-text);
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 input[type="text"]::placeholder {
@@ -130,21 +190,20 @@ input[type="text"]::placeholder {
 }
 
 input[type="text"]:focus {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -1px;
+  outline: none;
   border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-tint);
 }
 
 button[type="submit"] {
-  padding: 9px 18px;
-  font-size: 14px;
+  padding: 9px 16px;
+  font-size: 13px;
   font-weight: 600;
   font-family: var(--font-ui);
   color: #ffffff;
   background: var(--color-accent);
   border: 1px solid transparent;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-elevation-1);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   white-space: nowrap;
   transition: background-color 0.12s ease;
@@ -164,33 +223,95 @@ button[type="submit"]:disabled {
   cursor: not-allowed;
 }
 
+/* Secondary buttons — Copy Review / New Review */
+
+.secondary-button {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  color: var(--color-accent);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.secondary-button:hover {
+  background: var(--color-accent-tint);
+  border-color: var(--color-accent);
+}
+
+.secondary-button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 /* Output area */
 
 .output {
-  min-height: 80px;
+  min-height: 60px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-5) var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.empty-state-icon {
+  width: 26px;
+  height: 26px;
+  margin-bottom: var(--space-2);
+  color: var(--color-border-strong);
 }
 
 .idle-hint {
   color: var(--color-text-muted);
-  font-size: 14px;
+  font-size: 13px;
   margin: 0;
+  max-width: 40ch;
 }
 
-/* Loading state */
+/* Loading state — a few shimmer bars, no card container. */
 
-.loading {
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skeleton-line {
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #eceff3 25%, #f6f7f9 37%, #eceff3 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.loading-caption {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-2);
   color: var(--color-text-secondary);
-  font-size: 14px;
-  padding: 8px 0;
+  font-size: 13px;
+  margin: var(--space-4) 0 0;
 }
 
 .spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--color-border);
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border-strong);
   border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -202,7 +323,8 @@ button[type="submit"]:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner {
+  .spinner,
+  .skeleton-line {
     animation: none;
   }
 }
@@ -210,145 +332,467 @@ button[type="submit"]:disabled {
 /* Error state */
 
 .error-box {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: var(--space-4);
+}
+
+.error-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--color-danger);
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .error-box .error-title {
   font-weight: 600;
   color: var(--color-danger);
-  margin: 0 0 4px;
-  font-size: 14px;
+  margin: 0 0 2px;
+  font-size: 13px;
 }
 
 .error-box .error-message {
   margin: 0;
   color: var(--color-text);
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-/* Result */
+/* Context strip — repo name, commit hash, generated time, one line. No
+   card, just a hairline rule beneath it to separate it from the report. */
 
-.result-meta {
+.context-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 20px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-elevation-1);
-  padding: 12px 16px;
-  margin-bottom: 20px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
 }
 
-.result-meta .meta-label {
-  color: var(--color-text-muted);
-}
-
-.result-meta code {
-  font-family: var(--font-mono);
+.context-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
   font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
-.review-section {
-  background: var(--color-section-bg);
-  border: 1px solid var(--color-border);
-  border-left: 3px solid var(--color-accent);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-elevation-1);
-  padding: 20px 24px;
-  margin-bottom: 16px;
+.context-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 32ch;
 }
 
-.review-section:last-of-type {
-  margin-bottom: 0;
-}
-
-.review-section h2 {
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--color-accent-hover);
-  margin: 0 0 12px;
-}
-
-.review-section .section-body {
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.6;
+.context-commit {
+  font-family: var(--font-mono);
+  font-size: 11px;
   color: var(--color-text);
 }
 
-.review-section .section-body p {
-  margin: 0 0 12px;
+.context-time {
+  color: var(--color-text-muted);
 }
 
-.review-section .section-body p:last-child {
+.context-sep {
+  color: var(--color-border-strong);
+}
+
+.context-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+/* Jump nav — sticky, plain anchor links, no dropdown, no JS. */
+
+.jump-nav {
+  position: sticky;
+  top: 41px;
+  z-index: 1;
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  background: var(--color-bg);
+  padding: var(--space-2) 0;
+  margin-bottom: var(--space-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.jump-nav a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.jump-nav a:hover,
+.jump-nav a:focus-visible {
+  color: var(--color-accent);
+}
+
+/* Stages — Overview, Review Checklist, Changed Files/Change Summary,
+   Unknowns / Limitations, Technical Details. A hairline divider between
+   stages is the only structural device; everything else is spacing and
+   type weight. */
+
+.stage {
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.stage:first-of-type,
+.overview {
+  border-top: none;
+}
+
+.stage-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-2);
+}
+
+.section-body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.section-body p {
+  margin: 0 0 6px;
+}
+
+.section-body p:last-child {
   margin-bottom: 0;
 }
 
-.review-section .section-body ul,
-.review-section .section-body ol {
-  margin: 0 0 12px;
-  padding-left: 22px;
+.section-body ul,
+.section-body ol {
+  margin: 0 0 6px;
+  padding-left: 20px;
 }
 
-.review-section .section-body li {
-  margin-bottom: 6px;
+.section-body li {
+  margin-bottom: 4px;
 }
 
-.review-section .section-body li:last-child {
+.section-body li:last-child {
   margin-bottom: 0;
 }
 
-.review-section .section-body code {
+.section-body code {
   font-family: var(--font-mono);
   font-size: 0.9em;
-  background: rgba(26, 115, 232, 0.08);
+  background: var(--color-accent-tint);
   padding: 0.1em 0.35em;
   border-radius: 4px;
 }
 
-/* Verdict — the headline summary, given a touch more visual weight than
-   the other four sections, the same way a status card leads a dashboard. */
-.review-section-verdict {
-  background: var(--color-verdict-bg);
-  border-left-width: 4px;
-  box-shadow: var(--shadow-elevation-2);
+/* Overview — the hero. The single largest, boldest text on the page; the
+   model's own "why" sits underneath at normal weight. No derived category
+   label is shown — the backend has no severity field, and guessing one
+   from prose would be a fabricated signal. */
+
+.overview {
+  padding-top: 0;
+  padding-bottom: var(--space-5);
 }
 
-.review-section-verdict .section-body {
-  font-size: 15px;
+.overview-conclusion {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  color: var(--color-text);
+}
+
+.overview-why {
+  margin: var(--space-2) 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  max-width: 62ch;
+}
+
+/* Review Checklist — dense, numbered, collapsed reasoning. Each row carries
+   a real checkbox: checking it means "reviewed for this viewing" and is
+   purely a client-side, in-session cue (see app.js) — it resets on the
+   next review, since there is nothing to persist it against. */
+
+.checklist-list,
+.unknown-list,
+.file-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.checklist-item,
+.unknown-item,
+.file-item {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.checklist-item:last-child,
+.unknown-item:last-child,
+.file-item:last-child {
+  border-bottom: none;
+}
+
+.checklist-summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 8px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.checklist-item-plain .checklist-summary {
+  cursor: default;
+}
+
+.checklist-summary::-webkit-details-marker,
+.unknown-summary::-webkit-details-marker,
+.file-summary::-webkit-details-marker {
+  display: none;
+}
+
+.checklist-check {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.checklist-index {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  min-width: 14px;
+}
+
+.checklist-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.checklist-reasoning {
+  margin: 0 0 var(--space-2);
+  padding-left: 44px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* Marking a row's checkbox dims and strikes its title — an in-session
+   progress cue only. Degrades harmlessly (checkbox still works, no
+   strikethrough) in browsers that don't support :has(). */
+.checklist-item:has(.checklist-check:checked) .checklist-title {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+
+/* Unknowns / Limitations — the question leads; reasoning collapses behind it. */
+
+.unknown-summary {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.unknown-item-plain .unknown-summary {
+  cursor: default;
   font-weight: 500;
+}
+
+.unknown-reason {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* Changed Files — filename leads, evidence collapses behind it. Falls
+   back to a plain "Change Summary" (.section-body) when no filenames
+   could be identified in the underlying text. */
+
+.file-summary {
+  padding: 8px 0;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+}
+
+.file-name {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--color-text);
+  background: none;
+  padding: 0;
+}
+
+.file-evidence {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.file-evidence p {
+  margin: 0 0 6px;
+}
+
+.file-evidence p:last-child {
+  margin-bottom: 0;
+}
+
+.file-leftover {
+  padding-top: var(--space-2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.file-leftover-label {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+/* Disclosure carets — shared by Checklist, Unknowns, and Files rows. */
+
+details.checklist-item > .checklist-summary::after,
+details.unknown-item > .unknown-summary::after,
+details.file-item > .file-summary::after {
+  content: "▸";
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+details[open].checklist-item > .checklist-summary::after,
+details[open].unknown-item > .unknown-summary::after,
+details[open].file-item > .file-summary::after {
+  content: "▾";
+}
+
+/* Technical Details — a single collapsed disclosure, the lowest-priority
+   stage on the page. Contains the model's "minor notes" only — this is
+   not a place to reopen the response-validation findings that were
+   deliberately removed from the UI in an earlier round. */
+
+.tech-details summary.stage-label {
+  cursor: pointer;
+  list-style: none;
+}
+
+.tech-details summary.stage-label::-webkit-details-marker {
+  display: none;
+}
+
+.tech-details summary.stage-label::before {
+  content: "▸";
+  display: inline-block;
+  width: 14px;
+  color: var(--color-text-muted);
+}
+
+.tech-details[open] summary.stage-label::before {
+  content: "▾";
+}
+
+.tech-details[open] summary.stage-label {
+  margin-bottom: var(--space-2);
 }
 
 .raw-response .section-body {
   font-family: var(--font-mono);
-  font-size: 13px;
-  background: var(--color-note-bg);
+  font-size: 12px;
+  background: var(--color-bg);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: 12px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
   white-space: pre-wrap;
 }
 
 .raw-response-note {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--color-text-secondary);
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-2);
 }
 
-.validation-note {
-  margin-top: 24px;
-  padding: 12px;
-  background: var(--color-note-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  font-size: 13px;
-  color: var(--color-text-secondary);
+/* Responsive */
+
+@media (max-width: 640px) {
+  .app-bar-inner {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .page {
+    padding: var(--space-4) var(--space-3);
+  }
+
+  .review-form {
+    padding: var(--space-3);
+  }
+
+  .field-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .field-action button[type="submit"] {
+    width: 100%;
+  }
+
+  .context-strip {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .context-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .context-item {
+    max-width: 100%;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .overview-conclusion {
+    font-size: 21px;
+  }
+
+  .empty-state {
+    padding: var(--space-4) var(--space-3);
+  }
 }

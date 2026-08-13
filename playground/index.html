@@ -7,12 +7,21 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<header class="app-bar">
+  <div class="app-bar-inner">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">C</span>
+      <span class="brand-name">Commit Review</span>
+    </div>
+  </div>
+</header>
+
 <div class="page">
 
-  <header class="page-header">
+  <div class="page-header">
     <h1>Commit Review</h1>
-    <p class="subtitle">Enter a repository and commit to generate a review.</p>
-  </header>
+    <p class="subtitle">Review a single commit before it merges.</p>
+  </div>
 
   <form id="review-form" class="review-form" autocomplete="off">
     <div class="field">
@@ -44,7 +53,13 @@
   </form>
 
   <main id="output" class="output" aria-live="polite">
-    <p class="idle-hint">Enter a repository URL and click Review Commit to get started.</p>
+    <div class="empty-state">
+      <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <p class="idle-hint">Enter a repository URL and click Review Commit to get started.</p>
+    </div>
   </main>
 
 </div>
