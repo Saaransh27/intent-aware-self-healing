@@ -1,6 +1,6 @@
 import unittest
 
-from src.response_validation.response_validator import validate_response
+from src.response_validation.response_validator import sanitize_response, validate_response
 
 VALID_RESPONSE = """\
 ### Verdict
@@ -399,6 +399,60 @@ class ReservedTierSelfTaggingTests(unittest.TestCase):
         self.assertNotIn("reserved_confidence_tier_self_tagging", _rule_names(result))
 
 
+class SanitizeResponseTests(unittest.TestCase):
+    def _with_tag(self, phrase):
+        return VALID_RESPONSE.replace(
+            "1. Nothing here actually needs the reviewer's attention.",
+            f"1. Something changed ({phrase}).",
+        )
+
+    def test_strips_the_self_applied_tag(self):
+        text = self._with_tag("Observed interaction change")
+        cleaned = sanitize_response(text)
+        self.assertNotIn("(Observed", cleaned)
+        self.assertIn("Something changed.", cleaned)
+
+    def test_leaves_no_stray_space_before_punctuation(self):
+        text = self._with_tag("Observed interaction change")
+        cleaned = sanitize_response(text)
+        self.assertNotIn(" .", cleaned)
+        self.assertNotIn("  ", cleaned)
+
+    def test_cleaned_text_no_longer_trips_the_validator(self):
+        text = self._with_tag("Observed interaction change")
+        cleaned = sanitize_response(text)
+        result = validate_response(cleaned)
+        self.assertNotIn("reserved_confidence_tier_self_tagging", _rule_names(result))
+
+    def test_all_four_reserved_words_are_stripped(self):
+        for phrase in (
+            "Observed interaction change",
+            "Corroborated by wide reach",
+            "Inferred from context",
+            "Conflicting with prior note",
+        ):
+            with self.subTest(phrase=phrase):
+                cleaned = sanitize_response(self._with_tag(phrase))
+                self.assertNotIn(phrase, cleaned)
+
+    def test_does_not_strip_a_literal_claim_id_leak(self):
+        text = VALID_RESPONSE.replace(
+            "1. Nothing here actually needs the reviewer's attention.",
+            "1. Flagged due to shape.wide_change.",
+        )
+        cleaned = sanitize_response(text)
+        self.assertIn("shape.wide_change", cleaned)
+
+    def test_text_with_nothing_to_strip_is_returned_unchanged(self):
+        self.assertEqual(sanitize_response(VALID_RESPONSE), VALID_RESPONSE)
+
+    def test_allowed_uncertainty_terms_are_never_stripped(self):
+        for term in ("Confirmed", "Likely", "Worth checking", "Unknown"):
+            with self.subTest(term=term):
+                text = self._with_tag(term)
+                self.assertEqual(sanitize_response(text), text)
+
+
 class ModuleJargonLeakTests(unittest.TestCase):
     def _with_phrase(self, phrase):
         return VALID_RESPONSE.replace(
@@ -465,6 +519,24 @@ class MalformedMarkdownTests(unittest.TestCase):
         self.assertIn("malformed_markdown", _rule_names(result))
         finding = _findings_for(result, "malformed_markdown")[0]
         self.assertEqual(finding["severity"], "WARNING")
+
+    def test_python_double_star_syntax_inside_inline_code_is_not_flagged(self):
+        # Milestone 5: a real false positive found running the live
+        # pipeline against a real PR -- the model's own response
+        # legitimately referenced `**kwargs` inside backticks, which the
+        # naive per-character ** count read as an odd bold-toggle.
+        text = VALID_RESPONSE.replace(
+            "low-risk", "low-risk, and existing callers (including any that pass `**kwargs`)"
+        )
+        result = validate_response(text)
+        self.assertNotIn("malformed_markdown", _rule_names(result))
+
+    def test_unbalanced_bold_outside_inline_code_is_still_flagged(self):
+        # The fix only excludes ** inside backticks -- a real unbalanced
+        # bold marker elsewhere in the same response must still be caught.
+        text = VALID_RESPONSE.replace("low-risk", "**low-risk, with `**kwargs` mentioned too")
+        result = validate_response(text)
+        self.assertIn("malformed_markdown", _rule_names(result))
 
     def test_balanced_code_fence_is_not_flagged(self):
         text = VALID_RESPONSE + "\n```python\nx = 1\n```\n"

@@ -90,8 +90,12 @@ class DatasetCollector:
             "message": message,
         }
 
-    def _build_commit_change_set(self, repo_path, commit_hash):
-        changed_files = self.git_client.get_changed_files(repo_path, commit_hash)
+    def _build_commit_change_set(self, repo_path, commit_hash, parent_hash=None):
+        # parent_hash is an explicit override for the "old" side of the diff
+        # (e.g. a PR's merge-base) — None preserves the original behavior of
+        # deriving it from commit_hash's own first parent (see GitClient.
+        # get_changed_files, which this already delegates the same choice to).
+        changed_files = self.git_client.get_changed_files(repo_path, commit_hash, parent_hash=parent_hash)
 
         added_files = []
         deleted_files = []
@@ -115,6 +119,17 @@ class DatasetCollector:
             "deleted_files": deleted_files,
             "renamed_files": renamed_files,
             "modified_files": modified_files,
+        }
+
+    def _build_commit_diff_stats(self, repo_path, commit_hash, parent_hash=None):
+        stats = self.git_client.get_diff_stats(repo_path, commit_hash, parent_hash=parent_hash)
+        return {
+            "total_insertions": sum(entry["insertions"] or 0 for entry in stats),
+            "total_deletions": sum(entry["deletions"] or 0 for entry in stats),
+            "files": {
+                entry["path"]: {"insertions": entry["insertions"], "deletions": entry["deletions"]}
+                for entry in stats
+            },
         }
 
     def _build_commit_observations(self, change_set):
@@ -186,8 +201,8 @@ class DatasetCollector:
     def _build_commit_repository_signals(self, change_set):
         return detect_repository_signals(change_set["changed_files"])["repository_signals"]
 
-    def _build_commit_semantic_analysis(self, repo_path, commit_hash, change_set):
-        parent_hash = self.git_client.get_parent_hashes(repo_path, commit_hash)[0]
+    def _build_commit_semantic_analysis(self, repo_path, commit_hash, change_set, parent_hash=None):
+        parent_hash = parent_hash or self.git_client.get_parent_hashes(repo_path, commit_hash)[0]
         files = []
 
         for file_path in change_set["added_files"]:

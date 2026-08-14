@@ -16,8 +16,20 @@ class GitClient:
         )
         return result.stdout
 
-    def clone_repository(self, repo_url, destination, shallow=False):
-        args = ["clone"]
+    def _auth_args(self, access_token):
+        # A header, not a token-embedded URL: keeps repo_url clean in every
+        # caller's own error messages, and means git's own failure text
+        # (which echoes the URL, never a header) can't leak the token
+        # either. Residual risk, not eliminated: the header value is still
+        # a subprocess argument, visible via ps/procfs for the life of the
+        # git process. Avoiding that needs GIT_ASKPASS-based credential
+        # injection -- more machinery than this milestone's scope.
+        if not access_token:
+            return []
+        return ["-c", f"http.extraHeader=Authorization: Bearer {access_token}"]
+
+    def clone_repository(self, repo_url, destination, shallow=False, access_token=None):
+        args = self._auth_args(access_token) + ["clone"]
         if shallow:
             args += ["--depth", "1"]
         args += [repo_url, destination]
@@ -79,6 +91,56 @@ class GitClient:
                 status, old_path, new_path = fields
                 changed_files.append({"status": status, "old_path": old_path, "path": new_path})
         return changed_files
+
+    def get_diff_stats(self, repo_path, commit_hash, parent_hash=None):
+        """Real, objective per-file line counts via `git diff --numstat` — no
+        estimation involved. A binary file reports `insertions`/`deletions`
+        as None (git itself prints "-" for these, meaning "not applicable",
+        not zero) rather than silently coercing it to 0."""
+        if parent_hash is None:
+            parents = self.get_parent_hashes(repo_path, commit_hash)
+            parent_hash = parents[0] if parents else EMPTY_TREE_HASH
+        output = self.run_git_command(
+            ["diff", "--numstat", parent_hash, commit_hash], cwd=repo_path
+        )
+        stats = []
+        for line in output.splitlines():
+            if not line.strip():
+                continue
+            fields = line.split("\t")
+            insertions_raw, deletions_raw, path = fields[0], fields[1], fields[-1]
+            stats.append({
+                "path": path,
+                "insertions": int(insertions_raw) if insertions_raw != "-" else None,
+                "deletions": int(deletions_raw) if deletions_raw != "-" else None,
+            })
+        return stats
+
+    def get_merge_base(self, repo_path, ref_a, ref_b):
+        """The commit both `ref_a` and `ref_b` descend from — the same commit
+        git itself diffs against for `ref_a...ref_b` three-dot semantics."""
+        return self.run_git_command(["merge-base", ref_a, ref_b], cwd=repo_path).strip()
+
+    def get_pr_diff(self, repo_path, base_ref, head_ref):
+        """A PR's real diff: git's own three-dot semantics (`base...head`),
+        i.e. the diff against the merge-base of the two refs, not a direct
+        two-dot diff against base's current tip. This is deliberate — a base
+        branch that has advanced since the PR was opened must not appear as
+        part of the PR's own change. Does not touch get_commit_diff, which
+        keeps its existing first-parent, single-commit behavior unchanged."""
+        return self.run_git_command(["diff", f"{base_ref}...{head_ref}"], cwd=repo_path)
+
+    def fetch_ref(self, repo_path, ref, access_token=None):
+        """Fetches one ref/sha from `origin` into an already-cloned repo — a
+        PR's head commit (and sometimes its base, if the base branch has
+        moved past what the initial clone captured) may not be present in
+        the clone otherwise, especially for a head from a fork. A fresh
+        fetch does not inherit auth from the clone that created the
+        remote -- each git-over-HTTP call negotiates its own, so a private
+        repo's access_token must be passed here again, not just at clone."""
+        args = self._auth_args(access_token) + ["fetch", "origin", ref]
+        self.run_git_command(args, cwd=repo_path)
+        return None
 
     def get_file_content_at_commit(self, repo_path, commit_hash, file_path):
         return self.run_git_command(["show", f"{commit_hash}:{file_path}"], cwd=repo_path)

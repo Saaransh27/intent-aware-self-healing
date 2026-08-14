@@ -35,6 +35,9 @@ Three layers, one strict rule between them:
 - **`GitClient`** (`src/git/`) — the only place that knows how git works. Owns command
   construction, output parsing, and git-domain semantics (e.g. "a merge commit has more
   than one parent"). Nothing above it should ever reason about git internals directly.
+  Gained `get_diff_stats(repo_path, commit_hash)` in Milestone 26 (`git diff --numstat`)
+  for real per-file insertion/deletion counts, mapping git's own `-` binary marker to
+  `None` rather than `0`.
 - **`src/utils/`** — small, self-contained, git-agnostic helpers. `language_detector.py`
   classifies file paths by extension; `build_system_detector.py` classifies package
   manager from marker files (reading `pyproject.toml`'s content directly off the already
@@ -138,7 +141,13 @@ Three layers, one strict rule between them:
   reported, and resolved in favor of the ADR's literal text rather than silently
   designed around — see `docs/modules/llm_adapter.md`. Not wired into any
   pipeline entrypoint yet; `execute`'s real implementation remains future work.
-  See `MILESTONES.md` (Milestone 11A).
+  See `MILESTONES.md` (Milestone 11A). **As of Milestone 32**: `run_adapter`'s
+  `except Exception:` branch now logs the real exception server-side
+  (`_logger.exception(...)`) before swallowing it into
+  `execution_boundary_failure` — added after this exact blind spot hid an
+  expired production API key with zero diagnostic trace. ADR-015's Explicit
+  Absence/No Fabrication invariants are unchanged: the log is server-side
+  only, never part of this function's own return value or contract.
 - **`src/review_engine/`** (Milestone 12, implementing ADR-016) — a new layer,
   sibling to `src/adapter/`, consuming only `run_adapter`'s output. One public
   function, `review_engine.run_review_engine(adapter_result)`, returns a plain
@@ -170,6 +179,17 @@ Three layers, one strict rule between them:
   Coverage Ledger — using only facts the Reasoning Layer already concluded, never
   a new heuristic. Not persisted, not wired into any pipeline entrypoint yet. See
   `docs/modules/context_builder.md` and `MILESTONES.md` (Milestone 10A).
+  **Milestone 32 finding, not fixed**: its `RISK_BEARING_MODULES` treats
+  the entire `reach` module as risk-bearing (blocking the collapse
+  condition), which real evaluation against 8 diverse real PRs found
+  produces zero Coverage Ledger entries across the whole sample —
+  `reach.large_neighborhood`/`corroborated_wide_reach` are common
+  structural facts, not risk signals, so almost no real file ever
+  qualifies as "safe to collapse." The frontend's own, separate
+  risk-bearing definition (`claimVocabulary.js`) was narrowed in response
+  to the same finding; this backend definition was deliberately left
+  untouched, as backend-reasoning/ADR-011 territory outside a hardening
+  milestone's remit. See `docs/MILESTONE_5_HARDENING.md`.
 - **`src/prompt/`** (Milestone 10B, implementing ADR-014) — a new layer, sibling
   to `src/review/`, consuming only `ReviewContext` directly with no adapter (ADR-011
   built it specifically to be the one object anything downstream receives). One
@@ -252,22 +272,44 @@ Three layers, one strict rule between them:
   (Milestone 16A, `allow_origins=["*"]`) so a static page opened from a
   `file://` origin can reach it — a transport-level permission, not a new
   route or new logic; the endpoint surface is still exactly `GET /health`
-  and `POST /review`. As of Milestone 17B, `app.py` also calls
+  and `POST /review`. **Superseded by Milestone 2**: a wildcard origin
+  cannot legally combine with credentialed (cookie-bearing) requests,
+  which the `/github/*` routes need — `allow_origins` became an explicit
+  list (`FRONTEND_URL`, the deployed `playground/` URL, plus `"null"`)
+  with `allow_credentials=True`. **Superseded again by Milestone 32**:
+  `"null"` was removed — a browser sends that same origin value for a
+  sandboxed iframe with no `allow-same-origin`, not just the legacy
+  `file://` case it was added for, and allowlisting it let such a page
+  make a credentialed, readable cross-origin request. As of Milestone 17B,
+  `app.py` also calls
   `validate_response` (see below) immediately after `parse_review_sections`,
   on the same `response` string returned in `review.raw`. The pipeline order
   is now `run_adapter` → `run_review_engine` → `parse_review_sections` →
-  `validate_response` → API response. Findings are split into two
-  categories with different consequences, a distinction owned entirely by
-  `app.py`, not by the validator itself: Category A (`missing_section`,
-  `unclosed_code_fence`) is exactly the condition Milestone 14B's
-  `parsed: false` already represents, so it is never rejected — `200`,
-  `parsed`/`raw` unchanged from 14B, findings attached alongside; Category B
-  (`literal_claim_id_leak`, `reserved_confidence_tier_self_tagging`) is a
-  genuine contract violation 14B never addressed, so it is rejected with
-  `502` — the first case in this project where a generated response is
-  never returned to a client. Category B takes precedence when both fire
-  together. See `docs/MILESTONES.md` (Milestones 14, 14B, 16A, 17B) for the
-  full architectural reasoning behind this split.
+  `sanitize_response` → `validate_response` → API response.
+  **Superseded by Milestone 26**: Milestone 17B originally rejected a
+  Category B finding (`literal_claim_id_leak`,
+  `reserved_confidence_tier_self_tagging`) with `502`. In production this
+  fired non-deterministically — GPT-OSS-120B has no fixed seed, so an
+  identical request could pass or fail across calls — causing most
+  requests against a real repository to fail. `app.py`'s rejection logic
+  (`_PARSEABILITY_RELATED_RULES`/`_CONTRACT_VIOLATION_RULES`/
+  `_has_contract_violation`) was removed entirely in Milestone 26.
+  `sanitize_response` (new in `response_validator.py`) now strips the
+  reserved-confidence-tier self-tagging pattern before the response is
+  returned; `502` is reserved exclusively for a genuine
+  `execution_boundary_failure` from the Adapter. Every validation finding
+  — Category A and B alike — is still attached to `ReviewResponse.validation`
+  for transparency; none of them gate delivery anymore. See
+  `docs/MILESTONES.md` (Milestones 14, 14B, 16A, 17B, 26) for the full
+  history, including why the original Category B design was reversed
+  rather than merely patched.
+  **Also as of Milestone 26**: `ReviewResponse` gained two more optional,
+  additive fields — `review_context` (the exact `ReviewContext` object
+  already built for the Prompt Builder) and `observations` (file
+  classification, touched directories, change statistics/categories,
+  extraction confidence, and a new `diff_stats` field). Both were already
+  computed internally on every request; this only changed whether they
+  cross the API boundary. See `docs/MILESTONES.md` (Milestone 26).
 - **`src/response_validation/`** (Milestone 17A, implementing the design in
   `docs/research/response_validation_layer_design.md`; integrated into
   `src/api/app.py` in Milestone 17B) — a deterministic, side-effect-free,
@@ -285,13 +327,38 @@ Three layers, one strict rule between them:
   already-public `SECTION_KEYS` without any change to that module; the
   Review Engine, Adapter, and Prompt Builder remain untouched, and
   `response_validator.py` itself was not modified during integration. See
-  `docs/MILESTONES.md` (Milestones 17, 17A, 17B).
+  `docs/MILESTONES.md` (Milestones 17, 17A, 17B). **As of Milestone 32**:
+  `_check_bold_balance` excludes inline code spans (`` `[^`\n]*` ``)
+  before counting `**` markers — found via real model output legitimately
+  referencing `` `**kwargs` `` (Python syntax, not Markdown bold) inside
+  backticks, which the naive count misread as unbalanced. Same "don't
+  count what's inside code" discipline `_scan_headings` already applies
+  to fenced code blocks, extended here to inline spans.
 - **`playground/`** (Milestone 16A) — a single static HTML/CSS/vanilla-JS
   file, `index.html`, with no framework, no build step, and no Python code
   of its own; it consumes `POST /review` exactly as it exists, rendering
   `review.sections` when `parsed: true` and falling back to `review.raw`
   otherwise. Not part of `src/` — a thin, disposable consumer, not a new
-  architectural layer. See `docs/MILESTONES.md` (Milestone 16A).
+  architectural layer. **The only frontend currently deployed** (Vercel).
+  See `docs/MILESTONES.md` (Milestone 16A).
+- **`frontend/`** (Milestone 27) — a second, separate consumer of the same
+  `POST /review` endpoint: a React 19 + Vite app, undeployed, built to
+  consume `review_context`/`observations` (Milestone 26) directly rather
+  than parsing prose. Not part of `src/`, no backend dependency direction
+  change — it is a second client of the same unmodified API surface,
+  coexisting with `playground/` rather than replacing it. See
+  `docs/MILESTONES.md` (Milestone 27). **Superseded by Milestone 31**:
+  its primary flow is now GitHub login → repositories → open PRs → PR
+  review workspace (`/github/*` routes + `POST /review/pr`), with the
+  original commit-URL flow preserved but unlinked at `/legacy/commit`.
+  **As of Milestone 32**: `frontend/src/lib/claimVocabulary.js`'s
+  risk-bearing definition (used only for the frontend's own file/finding
+  tiering, NOT the same thing as `src/review/context_builder.py`'s
+  coverage-ledger definition below, despite having started out identical)
+  was narrowed after real evaluation against 8 diverse real PRs found
+  the broad version tiered 87% of real files "Requires Immediate Review."
+  The backend's own coverage-ledger definition was deliberately left
+  unchanged — see `docs/MILESTONE_5_HARDENING.md`.
 - **`DatasetCollector`** (`src/collector/`) — orchestration and I/O only. It asks
   `GitClient`/`src/utils` for things ("give me the tracked files," "classify these paths")
   and treats the answers as opaque values to persist. It owns the benchmark output layout
@@ -308,6 +375,20 @@ enforced it (moving merge-commit detection out of `DatasetCollector` and into
 direction; `GitClient` has zero knowledge of `DatasetCollector` or the benchmark output
 format.
 
+## Milestone 33 (V1 Product Validation & Release Readiness) — deployment configuration only
+
+`frontend/vercel.json` (new) — a catch-all SPA rewrite (`/(.*)` →
+`/index.html`), the standard minimal configuration a static host needs
+for client-side routing (`react-router-dom`) to survive a hard refresh
+on a nested route. No application code changed. See
+`docs/MILESTONE_6_RELEASE_READINESS.md` for the full validation this
+milestone performed and, critically, its central finding: the live
+Render backend is still running pre-Milestone-28 code (confirmed via
+real `404`s on `/github/me`/`/github/login`), because Milestones 28–32
+were never committed until this session — and, per explicit user
+instruction mid-session, most of that work remains staged-or-untracked
+rather than committed. Nothing from Milestones 28–33 is deployed.
+
 ## Not yet built
 
 No embeddings, no context graphs, no evaluation pipeline. As of Milestone 14B, a
@@ -318,7 +399,11 @@ no configuration surface, the Review Engine's category-1 validation catalogue is
 still empty, and there is no auth, persistence, retries, caching, or deployment
 configuration, all by explicit design. As of Milestone 17B, a deterministic
 Response Validation Layer (`src/response_validation/`) is wired into
-`POST /review` — genuine contract violations (internal-terminology leaks) are
-rejected with `502`, but there is still no sanitization, automatic repair, or
-regeneration; a rejection only denies the response. See `MILESTONES.md` and
-`PROJECT.md` for what's intentionally deferred.
+`POST /review`. **As of Milestone 26**, no validation finding rejects a
+response anymore — `sanitize_response` strips the one known-safe
+terminology artifact and `502` is reserved for a genuine
+`execution_boundary_failure`; there is still no automatic repair or
+regeneration beyond that one sanitization step. The product still reviews
+exactly one commit per request — no PR-level review, GitHub OAuth, or
+multi-repository workflow exists yet; see `docs/PR_REVIEW_MIGRATION.md`.
+See `MILESTONES.md` and `PROJECT.md` for what's intentionally deferred.

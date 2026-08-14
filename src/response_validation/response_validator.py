@@ -60,6 +60,27 @@ _RESERVED_TIER_WORDS = ("observed", "corroborated", "inferred", "conflicting")
 _RESERVED_TIER_TAG_PATTERN = re.compile(
     r"\((?:" + "|".join(_RESERVED_TIER_WORDS) + r")\b[^)]*\)", re.IGNORECASE
 )
+# Same pattern, but also consumes a preceding space so stripping the tag
+# never leaves a stray double-space or a space before punctuation.
+_RESERVED_TIER_TAG_STRIP_PATTERN = re.compile(
+    r"\s*\((?:" + "|".join(_RESERVED_TIER_WORDS) + r")\b[^)]*\)", re.IGNORECASE
+)
+
+
+def sanitize_response(text):
+    """Best-effort cleanup of a known-safe-to-strip artifact: a reserved
+    confidence-tier word used as a self-applied parenthetical tag (e.g.
+    "(observed low extraction confidence)"). This pattern is always a
+    parenthetical aside, so removing it never breaks the surrounding
+    sentence's grammar.
+
+    A literal claim-id leak (_CLAIM_ID_PATTERN) is deliberately NOT stripped
+    here: it's often embedded inline in a sentence (e.g. "...because
+    shape.low_extraction_confidence"), so removing it can leave a
+    grammatically broken result. That case is left for the validator to
+    flag rather than silently rewritten.
+    """
+    return _RESERVED_TIER_TAG_STRIP_PATTERN.sub("", text)
 
 # A maintained, growable list seeded from phrases actually observed leaking
 # during the Milestone 16B benchmark. Lower precision than the claim-id
@@ -78,6 +99,12 @@ _MODULE_JARGON_PATTERNS = (
 
 _BOLD_MARKER = "**"
 _MIN_DUPLICATE_PARAGRAPH_LENGTH = 20
+# Milestone 5: a real, demonstrated false positive -- Python double-star
+# syntax (`**kwargs`, dict-unpacking) referenced inside inline code spans
+# is common in a code-review response and has nothing to do with Markdown
+# bold. Stripped before counting, the same way _scan_headings already
+# treats fenced code blocks as opaque.
+_INLINE_CODE_SPAN = re.compile(r"`[^`\n]*`")
 
 _EXPECTED_ORDER = [key for key, _ in SECTION_KEYS]
 _LABEL_TO_KEY = {label.casefold(): key for key, label in SECTION_KEYS}
@@ -254,7 +281,8 @@ def _check_module_jargon(text):
 
 
 def _check_bold_balance(text):
-    if text.count(_BOLD_MARKER) % 2 != 0:
+    text_outside_inline_code = _INLINE_CODE_SPAN.sub("", text)
+    if text_outside_inline_code.count(_BOLD_MARKER) % 2 != 0:
         return [_finding(
             "malformed_markdown", "WARNING",
             "Unbalanced '**' (bold) markers in the response.",

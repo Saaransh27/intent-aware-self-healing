@@ -1,6 +1,6 @@
 # Current State
 
-_Last synced: 2026-08-01._
+_Last synced: 2026-08-09._
 
 ## What works
 
@@ -930,6 +930,235 @@ Milestone 23's no-gradients/no-glassmorphism/no-flashy-animation
 constraint. Verified against real saved API responses run through the
 actual rendering function. All 205 backend tests still pass.
 
+## Milestone 26 — Review Context/Observations Exposure + Response Contract Softening
+
+Fixed a real live-production bug: the deployed backend was returning
+`502` for most commits on a real repository because Milestone 17B's
+Category B validation rejection fired non-deterministically (the model
+has no fixed seed). `src/api/app.py` no longer hard-rejects on any
+validation finding — `502` is now reserved for a genuine
+`execution_boundary_failure` from the Adapter. `response_validator.py`
+gained `sanitize_response(text)` to strip one known-safe artifact before
+the response is returned. Verified against 20 real commits: contract-
+violation rate dropped from 35% to 0%.
+
+`POST /review` also now returns `review_context` and `observations`
+(including a new `diff_stats` field, from `GitClient.get_diff_stats` —
+`git diff --numstat`) — both already computed internally, now exposed for
+the first time. See `docs/MILESTONES.md` (Milestone 26) for full detail.
+217 tests total (205 + 12 new).
+
+**Not deployed** — the live Render backend still runs the pre-fix code.
+
+## Milestone 27 — React Frontend Rebuild ("Ink Ledger")
+
+A new frontend, `frontend/` (React 19 + Vite), built alongside —
+not replacing — `playground/` (untouched, still the live Vercel product).
+Converged through several rounds onto a 7-section layout
+(`ExecutiveSummary`, `CommitStats`, `FileOverview`, `ReviewFindings`,
+`OpenQuestions`, `ManualVerification`, `ReviewStrategy`) built around one
+goal: let a reviewer decide whether a commit is safe and what to inspect
+next in under 30 seconds.
+
+Every visible label is traceable to a real backend fact, per explicit
+instruction — no invented risk scores, confidence percentages, or time
+estimates. `frontend/src/lib/reviewTiers.js` implements three file tiers
+(`Requires Immediate Review` / `Standard Review` / `Routine`) and three
+finding tiers (`Critical` / `Medium` / `Low`), each a deterministic rule
+over `review_context`/`observations`, with the rule itself shown on
+screen next to the labels it produces. See `docs/MILESTONES.md`
+(Milestone 27) for the full design history and the specific backend
+fields each component consumes.
+
+**Not deployed** — `frontend/.env.local` points at `http://localhost:8020`.
+Reviews exactly one commit per request, same as the backend — no
+multi-commit or PR-level workflow yet (see `docs/PR_REVIEW_MIGRATION.md`).
+
+## Milestone 28 — PR Review Migration, Milestone 1: Backend PR Review
+
+`POST /review/pr {repository_url, pr_number}` — a new, separate endpoint
+alongside the unmodified `POST /review`. A PR is reviewed as one
+synthetic diff using git's real three-dot (`base...head`) semantics (the
+diff against the merge-base of the two refs, not a naive two-dot diff
+against base's current tip). New: `GitClient.get_merge_base`/
+`get_pr_diff`/`fetch_ref`; `src/github/pr_resolver.py` (unauthenticated
+GitHub REST API PR resolution); `orchestrator.run_pipeline_for_pr`;
+`PRReviewRequest`/`PRReviewResponse` in `src/api/models.py`. Everything
+from Evidence Fusion onward (fusion, all 6 reasoning modules,
+`context_builder`, `prompt_builder`, the Adapter, the Review Engine) runs
+completely unmodified — the PR evidence dict is shaped identically to the
+commit flow's.
+
+Known, accepted limitation: `_build_commit_file_history`/
+`_build_commit_co_change` only exclude the head commit from "history,"
+not the PR's other commits — a multi-commit PR touching the same file
+twice can mildly over-count historical churn. Single-commit PRs are
+unaffected.
+
+Verified against a real, merged PR — `pallets/click#3704` — with real
+GitHub API resolution, real clone/fetch, and a real three-dot diff whose
+totals (291/165) matched GitHub's own reported PR stats exactly. 238
+tests total (217 + 21 new). See `docs/MILESTONES.md` (Milestone 28) and
+`docs/PR_REVIEW_MIGRATION.md` for full detail.
+
+**Not deployed. No OAuth, no repository/PR discovery, no frontend
+changes** — all explicitly out of scope for this milestone.
+
+## Milestone 29 — PR Review Migration, Milestone 2: GitHub Auth + Discovery
+
+GitHub OAuth login (`GET /github/login`/`GET /github/callback`/`POST
+/github/logout`) and authenticated discovery (`GET /github/me`, `GET
+/github/repos`, `GET /github/repos/{owner}/{repo}/pulls`, `GET
+/github/repos/{owner}/{repo}/pulls/{number}`). No custom username/
+password system — GitHub is the only identity provider. Access tokens
+never reach the frontend: `src/api/session_store.py` (new, in-memory
+`dict[session_id → access_token]`) is the only place a token is kept;
+the browser holds only an opaque `session_id` cookie. New modules
+`src/github/oauth.py`/`src/github/client.py`, neither touching
+`src/github/pr_resolver.py` (Milestone 1, frozen). Discovery genuinely
+respects the authenticated user's real GitHub permissions — every call
+attaches `Authorization: Bearer <token>`, so a private repo the token
+can't see surfaces GitHub's own real `404`, not a separate authorization
+layer this project invented.
+
+One necessary shared change: `CORSMiddleware` now uses an explicit
+origin allowlist plus `allow_credentials=True` (a wildcard origin cannot
+legally combine with cookie-bearing requests) — `/review` and
+`/review/pr`'s own route handlers are untouched.
+
+**Known, deliberate gap**: a user can discover a private repo's PRs
+through the new endpoints, but `POST /review/pr` still can't review one
+— it stays fully unauthenticated, per explicit scope. Real follow-up
+work, not yet scheduled.
+
+**Verification is honestly partial**: no registered GitHub OAuth App or
+personal access token exists in this sandbox, so the full live
+login→discovery flow couldn't be exercised end-to-end (same limitation
+class as `SHAKTI_API_KEY`'s absence). What was verified for real: a live
+call against the actual GitHub API with a deliberately invalid token
+returned a real, correctly-parsed 401. Everything else — 46 new tests —
+uses a mocked HTTP layer, per this milestone's own testing guidance. 284
+tests total (238 + 46 new). See `docs/MILESTONES.md` (Milestone 29) and
+`docs/PR_REVIEW_MIGRATION.md` for full detail.
+
+**Not deployed. No frontend changes** — neither `playground/` nor
+`frontend/` can call any `/github/*` route yet.
+
+## Milestone 30 — PR Review Migration, Milestone 3A: Authenticated Private-Repo PR Review
+
+`POST /review/pr` can now review a **private** repository's PR when the
+caller has a valid session — closing the exact gap Milestone 29 named.
+Authentication is additive: no session cookie behaves byte-identically
+to Milestone 1 (re-verified live against `pallets/click#3704` — same
+SHAs, same file count, same diff totals). `src/github/pr_resolver.py`
+remains completely untouched; a new, separate `get_pull_request_refs`
+(`src/github/client.py`) is the authenticated equivalent, selected at
+request time by `get_pr_pipeline_runner` based on `session_store.
+get_optional_access_token` (new — like Milestone 29's dependency, but
+never raises; a missing or invalid session just means "review
+unauthenticated," not "reject the request"). `GitClient.
+clone_repository`/`fetch_ref` gained an optional `access_token`,
+applied as a git `http.extraHeader` (not a token-embedded URL — keeps
+`repository_url` clean in every error message, and git's own failure
+text can't echo a header the way it could a URL).
+
+**Verification is honestly partial**: no real private GitHub repository
+exists in this sandbox, so private-repo access is proven at the
+mechanism level (a real local git remote + a spy confirming the token
+reaches exactly the 3 real git calls that matter) rather than against
+genuine private-repo data. 311 tests total (284 + 27 new). See
+`docs/MILESTONES.md` (Milestone 30) and `docs/PR_REVIEW_MIGRATION.md`
+for full detail, including the one residual, named security
+consideration (the token is still a subprocess argument, visible via
+`ps`/procfs for the life of the git process).
+
+**Not deployed. No database/Redis/workers added — sessions remain
+in-memory. No frontend changes.**
+
+## Milestone 31 — PR Review Migration, Milestone 4: Product Frontend / PR Review Workspace
+
+The React frontend's primary flow is now GitHub login → accessible
+repositories → open PRs → a persistent-sidebar PR review workspace with
+previous/next navigation — replacing "repository URL + commit hash" as
+the app's main entry point. The old commit-URL flow still works exactly
+as before (`pages/CommitReviewPage.jsx`), reachable only at
+`/legacy/commit`; nothing in the new sidebar links to it.
+
+New: `react-router-dom` (real URLs); `vitest`/`@testing-library/react`
+(this project's first frontend test infrastructure — 41 new tests);
+`lib/authApi.js` (session-cookie-authenticated GitHub discovery calls);
+`Sidebar`/`RepositoryList`/`LoginGate`/`PRHeader`/`PRNavigation`/
+`ReviewLoadingState`/`EmptyState`/`ProseSection`/`SupportingDetails`
+(collapsed-by-default accordion) components; `RepoWorkspace`/`PRList`/
+`PRDetail` pages. `FileOverview`/`ReviewFindings`/`OpenQuestions`/
+`ManualVerification`/`ReviewStrategy` and all of `reviewContext.js`/
+`reviewTiers.js`/`claimVocabulary.js`/`textFormatting.jsx` reused with
+zero changes (already generic over `review_context`/`observations`).
+
+One small, additive backend touch: `src/github/client.py` now extracts
+real `additions`/`deletions`/`changed_files` from GitHub's single-PR
+endpoint (previously unextracted, though already present in the
+response); `PullRequestSummary`/`PullRequestDetail` gained the matching
+optional fields. GitHub's PR *list* endpoint never returns these three
+fields — a real, named limitation, not fixed here — so `PRList` rows
+never show change-size stats; real values appear once a specific PR is
+opened. Evidence Fusion, reasoning, `context_builder`, `prompt_builder`,
+the Adapter, the Review Engine, and `POST /review`'s own logic are all
+untouched.
+
+**Verification is honestly partial**, the same limitation class flagged
+since Milestone 2: no registered GitHub OAuth App or personal access
+token exists in this sandbox, so the live login → repo list → PR list →
+review flow could not be exercised end-to-end in a real browser. What
+was verified for real: the backend returns a genuine `401` for
+`/github/me` unauthenticated (confirmed via `curl`, exactly what makes
+the frontend show `LoginGate`), and the frontend build/lint/dev server
+are all clean. Every authenticated state is covered by 41 mocked-network
+tests. 313 backend tests still pass. See `docs/MILESTONES.md`
+(Milestone 31) and `docs/PR_REVIEW_MIGRATION.md` for full detail.
+
+**Not deployed. No GitHub write actions, comments, webhooks,
+notifications, database, Redis, billing, teams/roles, analytics, or
+CI/CD were added**, per explicit milestone boundary.
+
+## Milestone 32 — V1 Hardening & Real-World Validation
+
+Full detail: `docs/MILESTONE_5_HARDENING.md`. This milestone ran 8 real,
+diverse PRs through the complete real pipeline (real Shakti LLM output,
+not mocked) and critically evaluated the result — not just whether
+automated tests pass.
+
+**Fixed, all grounded in real evidence**: `claimVocabulary.js`'s risk-
+bearing definition was far too broad (87% of real files across the
+sample tiered "Requires Immediate Review," including a one-line doc
+typo fix) — narrowed, re-measured at 63%; `"null"` removed from the CORS
+allowlist (a real credentialed cross-origin exposure, not just the
+legacy `file://` case it was added for); `PullRequestSummary`/`Detail`
+gained a real `state` field so `PRHeader` stops defaulting to "Open" for
+a closed/merged PR; a 401 mid-session now routes back to `LoginGate`
+(or shows a real "Sign in again" action) instead of leaving the sidebar
+stuck; `llm_adapter.py` gained one exception-logging line (explicitly
+approved given its protected history) — this is what hid an expired
+`SHAKTI_API_KEY` with zero server-side trace; `response_validator.py`'s
+bold-balance check no longer misreads `` `**kwargs` `` in real model
+output as unbalanced Markdown.
+
+**Classified acceptable for V1, not fixed**: no CSRF token on state-
+changing endpoints, in-memory sessions, token-as-subprocess-argument
+during git clone, GitHub API rate limits, React StrictMode's dev-only
+double-fetch on mount — each with a stated reason, not a default
+deferral. **No V1 blockers found.**
+
+**Named, not fixed**: the backend's own coverage ledger
+(`context_builder.py`, ADR-011) has the identical too-broad risk-bearing
+definition the frontend fix above addressed — zero collapse entries
+fired across all 8 real PRs — left untouched as backend-reasoning
+territory deserving its own dedicated review.
+
+**Verified**: 313 → 316 backend tests, 41 → 58 frontend tests, all
+passing; build/lint clean. `pages/CommitReviewPage.jsx` (dead code)
+re-reviewed, still fully functional, untouched.
+
 ## What exists
 
 - `src/git/git_client.py` — `GitClient`, full git-plumbing layer. See
@@ -959,21 +1188,57 @@ actual rendering function. All 205 backend tests still pass.
   round its model constant is `openai/gpt-oss-120b` and it is **the real
   production `execute`**, wired into `src/api/app.py`'s default dependency.
 - `src/api/app.py` — the FastAPI app (Milestone 14B): `GET /health`, `POST
-  /review`, plus `CORSMiddleware` (Milestone 16A) so the playground can
+  /review`, plus `CORSMiddleware` (Milestone 16A) so a static frontend can
   reach it, plus (Milestone 17B) `validate_response` wired in after
-  `parse_review_sections` — Category A findings (`missing_section`,
-  `unclosed_code_fence`) attached but never rejected; Category B findings
-  (`literal_claim_id_leak`, `reserved_confidence_tier_self_tagging`)
-  rejected with `502`. `src/api/response_parser.py` — `parse_review_sections`,
+  `parse_review_sections`. **As of Milestone 26**, no validation finding
+  of any kind causes a rejection — `sanitize_response` (in
+  `response_validator.py`) strips the one known-safe self-tagging
+  artifact first, and `502` is reserved exclusively for a genuine
+  `execution_boundary_failure` reported by the Adapter. All findings are
+  still attached to `ReviewResponse.validation` for transparency; they no
+  longer gate delivery. `src/api/response_parser.py` — `parse_review_sections`,
   splits a model response into ADR-013's five sections outside the Review
-  Engine. `src/api/models.py` — the request/response Pydantic schema, now
-  including `ValidationResult`/`ValidationFinding` and `ReviewResponse.validation`.
+  Engine. `src/api/models.py` — the request/response Pydantic schema,
+  including `ValidationResult`/`ValidationFinding`/`ReviewResponse.validation`
+  and, as of Milestone 26, `ReviewContext` and `Observations` (see below).
+- **As of Milestone 26**, `ReviewResponse` also carries `review_context`
+  (the Milestone 10A `ReviewContext` object — commit summary, per-commit/
+  per-file claims and gaps, coverage ledger, all already computed
+  internally) and `observations` (file classification, touched
+  directories, change statistics/categories, extraction confidence, and a
+  new `diff_stats` field from `GitClient.get_diff_stats` — real per-file
+  `git diff --numstat` insertion/deletion counts, `None` for binary
+  files). Both fields are optional/additive; no existing field changed.
 - `playground/index.html`, `playground/styles.css`, `playground/app.js`,
   `playground/config.js` (Milestone 16A, restyled as the Version 1 product
   UI in Milestone 23, made deployment-configurable in Milestone 24A) —
   four dependency-free static files (structure/style/behavior/deployment
   config) serving `POST /review`. Not part of `src/`; no Python code, no
-  build step.
+  build step. **The only frontend currently deployed** (Vercel); untouched
+  by Milestone 27 below and unaware of `review_context`/`observations`.
+- `frontend/` (Milestone 27, restructured in Milestone 31) — a separate,
+  undeployed React 19 + Vite app. **As of Milestone 31**, its primary
+  flow is GitHub login → repositories → open PRs → PR review workspace
+  (`App.jsx` is a `react-router-dom` root; `pages/RepoWorkspace.jsx`,
+  `pages/PRList.jsx`, `pages/PRDetail.jsx`), consuming `/github/me`,
+  `/github/repos`, `/github/repos/{owner}/{repo}/pulls`,
+  `/github/repos/{owner}/{repo}/pulls/{number}`, and `POST /review/pr`
+  (all with `credentials: "include"`, via the new `lib/authApi.js`). The
+  original commit-URL flow (`ExecutiveSummary`, `CommitStats`,
+  `FileOverview`, `ReviewFindings`, `OpenQuestions`,
+  `ManualVerification`, `ReviewStrategy` consuming `POST /review`) still
+  works unchanged, moved to `pages/CommitReviewPage.jsx`, reachable only
+  at `/legacy/commit` — not linked from the new UI. Every visible label
+  still traces to a real backend fact via the same deterministic rules
+  in `frontend/src/lib/reviewTiers.js`, reused unmodified. See
+  `docs/MILESTONES.md` (Milestones 27, 31).
+- `frontend/src/test/setup.js`, `vite.config.js`'s `test` block
+  (Milestone 31) — this project's first frontend test infrastructure
+  (`vitest`, `@testing-library/react`); none existed before Milestone 31.
+  Extended in Milestone 32 with `frontend/src/lib/claimVocabulary.test.js`
+  (grounded in real claim shapes from 8 real PRs) and real-401/closed-PR-
+  state cases across `PRHeader`/`EmptyState`/`PRList`/`PRDetail`/`App`'s
+  existing test files. **58 tests total across 10 files.**
 - `Procfile`, `.env.example` (Milestone 24A) — repo-root deployment
   configuration for Railway. `Procfile` sets the start command
   (`--host 0.0.0.0 --port $PORT`); `.env.example` documents required
@@ -1017,17 +1282,86 @@ actual rendering function. All 205 backend tests still pass.
 - `src/response_validation/response_validator.py` — `validate_response(response_text)`,
   the Milestone 17A deterministic Response Validation Layer, wired into
   `POST /review` as of Milestone 17B (see above).
+- `src/github/pr_resolver.py` — `resolve_pull_request(repository_url,
+  pr_number)`, the Milestone 28 unauthenticated GitHub REST API PR
+  resolver (base/head SHAs, title, body, author, created_at).
+- `src/pipeline/orchestrator.py` — additionally `run_pipeline_for_pr(
+  repository_url, pr_number, execute, resolve_pr)`, the Milestone 28 PR
+  analogue of `run_pipeline_for_commit`, sharing the entire chain from
+  `fuse_evidence` onward unmodified.
+- `src/api/app.py` — additionally `POST /review/pr`, the Milestone 28 PR
+  review endpoint, separate from `POST /review`.
+- `src/api/session_store.py` — the Milestone 29 in-memory
+  `dict[session_id → access_token]`, `get_current_access_token` (401 on a
+  missing/unknown session), and (Milestone 30) `get_optional_access_token`
+  (never raises — a missing/unknown session resolves to `None`). No
+  database; sessions do not survive a restart or multiple worker
+  processes, by design.
+- `src/github/oauth.py` — `build_authorize_url`/`exchange_code_for_token`,
+  the Milestone 29 GitHub OAuth code/token exchange.
+- `src/github/client.py` — `get_authenticated_user`/`list_repositories`/
+  `list_open_pull_requests`/`get_pull_request` (Milestone 29, each
+  attaches the session's real token — results reflect that user's actual
+  GitHub permissions), plus (Milestone 30) `get_pull_request_refs` — the
+  authenticated drop-in for `pr_resolver.resolve_pull_request`, same
+  output shape, able to see a private repo's PR.
+- `src/git/git_client.py` — `clone_repository`/`fetch_ref` gained an
+  optional `access_token` (Milestone 30), applied as a git
+  `http.extraHeader`, not a token-embedded URL.
+- `src/pipeline/orchestrator.py` — `run_pipeline_for_pr` gained an
+  optional `access_token` (Milestone 30), threaded only to its own two
+  direct network calls (`clone_repository`, `fetch_ref`).
+- `src/api/app.py` — additionally `GET /github/login`, `GET
+  /github/callback`, `POST /github/logout`, `GET /github/me`, `GET
+  /github/repos`, `GET /github/repos/{owner}/{repo}/pulls`, `GET
+  /github/repos/{owner}/{repo}/pulls/{number}` (Milestone 29). CORS
+  middleware now uses an explicit origin allowlist + `allow_credentials=True`
+  instead of a wildcard, required for the session cookie to work at all.
+  As of Milestone 30, `get_pr_pipeline_runner` picks an authenticated or
+  unauthenticated PR resolver at request time based on
+  `get_optional_access_token`.
 - `tests/review/test_context_builder.py` — 22 tests. `tests/prompt/test_prompt_builder.py`
   — 25 tests. `tests/adapter/test_llm_adapter.py` — 27 tests.
   `tests/review_engine/test_review_engine.py` — 11 tests.
-  `tests/pipeline/test_orchestrator.py` — 6 tests. `tests/api/test_response_parser.py`
-  — 8 tests. `tests/api/test_app.py` — 24 tests (10 from Milestone 14B/16A,
-  unmodified, plus 14 new Milestone 17B integration tests).
-  `tests/response_validation/test_response_validator.py` — 75 tests. All stdlib
-  `unittest`; 198 tests total across the repository.
+  `tests/pipeline/test_orchestrator.py` — extended with a real, hand-verified
+  `diff_stats` assertion in Milestone 26, a real-local-repo PR test
+  class in Milestone 28, and (Milestone 30) `RunPipelineForPRWithAuthTests`
+  — a spy on `GitClient._auth_args` proving a token reaches exactly the 3
+  real git calls that matter, plus simulated git/GitHub auth-failure
+  paths. `tests/api/test_response_parser.py`
+  — 8 tests. `tests/api/test_app.py` — extended in Milestone 26 with
+  `review_context`/`observations` exposure tests and rewritten Category
+  A/B behavior tests, in Milestone 28 with a `PRReviewApiTests` class,
+  in Milestone 29 with 9 new classes covering OAuth login/callback/
+  logout, an explicit auth-boundary class, session isolation, real
+  404-propagation, and CORS credentials, and in Milestone 30 with
+  `GetPrPipelineRunnerAuthTests` (resolver selection, direct function
+  calls) and `PRReviewSessionBehaviorTests` (real cookie parsing,
+  including a forged/expired session falling back gracefully, and
+  confirming `POST /review` is unaffected by a session cookie riding
+  along). `tests/api/test_session_store.py` (Milestone 29, extended in
+  Milestone 30 with `GetOptionalAccessTokenDependencyTests`).
+  `tests/git/test_git_client.py` — includes `GetDiffStatsTests`
+  (Milestone 26), `GetPrDiffAndMergeBaseTests`/`FetchRefTests`
+  (Milestone 28), and `AuthArgsTests`/`AuthenticatedCloneAndFetchTests`
+  (Milestone 30). `tests/response_validation/test_response_validator.py`
+  — includes `SanitizeResponseTests` (Milestone 26). `tests/github/
+  test_pr_resolver.py` (Milestone 28), `test_oauth.py` (Milestone 29),
+  `test_client.py` (Milestone 29, extended in Milestone 30 with
+  `GetPullRequestRefsTests`, and in Milestone 32 with real `state`-field
+  extraction) — all mocked HTTP layer. `tests/response_validation/
+  test_response_validator.py` extended in Milestone 32 with regression
+  tests for the real `**kwargs`-inside-backticks false positive.
+  `tests/api/test_app.py` extended in Milestone 32 with a `"null"`-origin
+  CORS regression test. All stdlib `unittest`; **316 tests total** across
+  the repository (confirmed via a
+  fresh `pytest` run as of this documentation pass).
 - `requirements.txt` — lists `fastapi`, `uvicorn`, `httpx` (Milestone 14B, this
-  project's first-ever runtime dependencies, needed only for `src/api/`).
-  Everything else remains Python stdlib plus the `git` binary.
+  project's first-ever runtime dependencies, needed only for `src/api/`),
+  plus `certifi` (Milestone 28, an explicit CA bundle for
+  `src/github/pr_resolver.py`'s raw `urllib` HTTPS call — previously only
+  a transitive dependency of `httpx`). Everything else remains Python
+  stdlib plus the `git` binary.
 
 ## What does not exist yet
 
@@ -1040,8 +1374,20 @@ no test suite exists yet for any earlier layer (`GitClient`, `src/utils/`,
 via ad hoc runs against real repositories, documented in `MILESTONES.md`. No
 commit-quality filtering (bot authors, vague messages, diff size) — every non-merge
 commit currently qualifies. `GitClient` is still constructed internally by
-`DatasetCollector`, not injected. No GitHub API metadata (stars, description,
-license) — only git-derived fields exist so far. `build_system` field exists in the
+`DatasetCollector`, not injected. **As of Milestone 28**, `src/github/pr_resolver.py`
+calls the real GitHub API, but only for a single PR's base/head/title/
+body/author, unauthenticated (public repositories only) — a caller must
+already know the exact PR number. **As of Milestone 29**, real GitHub
+OAuth login and authenticated discovery (`/github/me`, `/github/repos`,
+open-PR listing, single-PR metadata) exist and do respect the
+authenticated user's real permissions (private repos included). **As of
+Milestone 30**, `POST /review/pr` can also use that same session to
+review a private repo's PR — `pr_resolver.py` is still untouched;
+`src/github/client.py`'s `get_pull_request_refs` is the authenticated
+path instead, selected automatically when a valid session is present.
+No repository-level metadata (stars, description, license) beyond what
+discovery already returns; `/github/repos` is capped at 100 results, not
+paginated. `build_system` field exists in the
 schema but has no detection logic — always `null`. A real `execute` implementation
 now exists (`src/pipeline/shakti_execute.call_shakti`, calling GPT-OSS-120B as
 of the Milestone 16B full-execution round) — still hardcoded to one
@@ -1053,7 +1399,122 @@ assembly `run_pipeline_for_commit` performs itself. The Review Engine's
 (ADR-016 defers it). `src/api/app.py`'s `POST /review` is now the first real
 consumer of `run_review_engine`'s result. ADR-012/013 remain architecture
 restated as instructions inside the Prompt Builder's system prompt, not
-independently implemented by anything. No retries, caching, auth,
-persistence, or provider abstraction exist, by design — this project's first
-runtime dependencies (`fastapi`, `uvicorn`, `httpx`) exist solely to serve the
-two endpoints above.
+independently implemented by anything. No retries, caching, or provider
+abstraction exist, by design. **Auth now exists (Milestone 29) but only
+as an in-memory session store** — no persistence layer of any kind
+exists anywhere in this project, by design; this project's first runtime
+dependencies (`fastapi`, `uvicorn`, `httpx`, and now `certifi`) exist
+solely to serve the endpoints documented above.
+
+**As of Milestone 26/27**: the Milestone 26 backend fix and contract
+expansion have not been deployed — the live Render backend still runs the
+pre-fix code. `frontend/` (Milestone 27) has never been deployed anywhere.
+
+**As of Milestone 28**: `POST /review/pr` can review a real PR's complete
+base...head diff end-to-end.
+
+**As of Milestone 29**: real GitHub OAuth login and authenticated
+repository/PR discovery both exist.
+
+**As of Milestone 30**: `POST /review/pr` can review a private repo's PR
+too, when the caller has a valid session — the specific gap Milestone 29
+named is closed.
+
+**As of Milestone 31**: `frontend/` now has full frontend awareness of
+all of the above — GitHub login, repository/PR discovery, and a PR
+review workspace with previous/next navigation. `playground/` (the
+still-deployed static site) is unchanged and still only knows how to
+submit a repository URL + optional commit hash; it cannot call any
+`/github/*` route or authenticate.
+
+**As of Milestone 32**: real evaluation against 8 diverse real PRs
+found and fixed 6 real issues (tier-prioritization noise, a CORS
+security gap, a missing PR-state field, a stuck-session UX gap, silent
+adapter exception swallowing, a validator false positive) and
+classified every remaining security limitation as acceptable for V1
+with a stated reason. **No V1 blockers exist.** The backend's coverage-
+ledger risk-bearing definition has the same over-broad issue the
+frontend fix addressed, and remains open — named, not fixed. Nothing
+from Milestones 28/29/30/31/32 is deployed. See
+`docs/PR_REVIEW_MIGRATION.md` for the full migration plan and
+`docs/MILESTONE_5_HARDENING.md` for this milestone's complete findings.
+
+## Milestone 33 — V1 Product Validation & Release Readiness
+
+Full detail: `docs/MILESTONE_6_RELEASE_READINESS.md`. A release-
+readiness validation pass, not feature work: the real 19-step user
+journey was walked and each step classified as actually verified / verified
+with local mocks / unable to verify (no GitHub OAuth App or deployment
+credentials exist in this environment). One real, demonstrated gap was
+found and fixed: `frontend/` had no SPA-rewrite configuration for a
+static host, which would 404 a hard refresh on any nested route in
+production — `frontend/vercel.json` was added. A new real-data test,
+`PRDetail.realdata.test.jsx`, renders an actual captured `POST
+/review/pr` response (`pallets/click#2202`) through the real component
+tree, closing the loop between "the backend produces this shape" and
+"the frontend renders it correctly" with real data rather than a
+hand-typed fixture.
+
+**The most significant finding is not a code defect**: the live
+deployed Render backend was confirmed, via real `404`s on `/github/me`
+and `/github/login`, to still be running pre-Milestone-28 code —
+everything from Milestone 28 (PR review) through Milestone 32
+(hardening) had never been committed, let alone deployed, before this
+milestone. Mid-milestone, one commit was made (`864f5a7`, unrelated
+Milestone 25A leftovers); the user then explicitly instructed no
+further `git add`/`commit`/`push` for the rest of the milestone. As a
+result, **most of Milestones 28–32's code remains staged-or-untracked,
+by explicit instruction, and nothing has been pushed or deployed.**
+
+No architecture, reasoning pipeline, prompts, or secondary issues were
+touched, per this milestone's explicit scope. 316 backend tests, 59
+frontend tests (58 + 1 new real-data test) — all passing; build and
+lint clean.
+
+**Not deployed, and could not be, this session**: no Render/Vercel
+dashboard access and no registered GitHub OAuth App exist in this
+environment, and per explicit instruction most code remains
+uncommitted. See `docs/MILESTONE_6_RELEASE_READINESS.md` for the exact
+per-step verification table, deployment configuration checklist, and
+honest final V1 status.
+
+**Update, same session**: a real, registered GitHub OAuth App now
+exists (Client ID/Secret added to the local `.env`), and a real
+end-to-end login against the locally running backend/frontend
+succeeded — confirmed via the backend's own request log (a real
+`/github/callback` exchange, `/github/me`, `/github/repos`, and PR
+listing for a real repository, `Saaransh27/Sash.AI`, all returning real
+`200`s). Local `.env` requires `set -a; source .env; set +a` before
+starting `uvicorn` — nothing in this project auto-loads `.env`.
+
+## Milestone 7 — V1 Functional QA (real, credentialed, browser-driven)
+
+First real pass through the full workflow with a real GitHub OAuth App
+and browser session — all 12 requested flows verified for real,
+including 5 diverse real PRs through `POST /review/pr` and a real
+logout → re-login cycle. No functional bug required fixing. One real,
+reproducible finding was left unfixed by design: a literal internal
+claim-id leak (`shape.narrow_change`, `shape.touches_documentation`) in
+real model output for `fastapi/fastapi#16171`, confirmed to reach the
+rendered page since the frontend never reads the backend's own
+`validation` field — the same known, stochastic Prompt v1 behavior
+Milestone 16B already measured and declined to patch ad hoc; a safe fix
+needs either a prompt change (out of scope here) or content-aware
+repair, not a blind string strip. See `docs/CHANGELOG.md` for the full
+per-flow evidence.
+
+## Milestone 7A — Selective Repository Workspace
+
+Frontend-only, additive: the sidebar now shows only a user-selected
+subset of the repositories `GET /github/repos` returns (unchanged,
+still every repository the user actually has access to). New
+`frontend/src/lib/repoSelection.js` (localStorage persistence,
+reconciliation on refresh), `frontend/src/components/RepositorySelector.jsx`
+(search/select/deselect/select-all-visible/clear/save modal), a
+"Manage repositories" sidebar action, and a first-time onboarding empty
+state distinct from "selection confirmed as empty." No GitHub OAuth,
+session handling, `/review/pr`, review pipeline, or existing PR review
+UI touched — repo → PR list → PR detail → prev/next navigation is
+unaffected. 21 new frontend tests (80 total), 316 backend tests
+unchanged, build/lint clean. See `docs/CHANGELOG.md` for full detail.
+Not committed or deployed as part of this milestone.
