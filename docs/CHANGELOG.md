@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-08-15 (Commit + partial deploy — real, not fully working)
+
+Per explicit instruction, all of Milestones 28-35's previously-uncommitted
+work was committed (`a086b79`) and pushed to `origin/main` via `gh`'s
+stored auth (plain `git push` couldn't reach the sandboxed shell's
+keychain; `gh auth setup-git` wired git to reuse `gh`'s existing token
+instead — no new credentials were created or exposed).
+
+**The push triggered a real Render auto-deploy** — confirmed genuinely,
+not assumed: the live backend's `/github/me` now returns a real `401`
+(previously a real `404`, proving it ran pre-Milestone-28 code). This
+is real progress, stated plainly alongside what's still broken:
+
+- **`GET /github/login` returns a real `500`** on the live service —
+  `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` were only ever added to the
+  local `.env`, never to Render's dashboard (no access to it exists in
+  this environment). Real GitHub login does not work in production yet.
+- **`POST /review/pr` returns a real `502` ("the model did not produce a
+  usable response")** on two different real, public PRs
+  (`psf/requests#7603`, `pallets/click#2202`) — a genuine, reproduced
+  `execution_boundary_failure`, the same failure mode Milestone 5
+  diagnosed as an expired `SHAKTI_API_KEY`. The key works locally
+  (5 real PRs succeeded in Milestone 7); Render's own copy of it is
+  unverified and cannot be checked or updated without dashboard access.
+- **`frontend/` remains undeployed** — no Vercel/Render CLI is
+  installed in this environment and no Vercel project for `frontend/`
+  exists; nothing changed here.
+
+**Not invented as a success**: the deploy is real but the product is
+not currently functional in production. Fixing this needs Render
+dashboard access to set the four OAuth env vars and verify/refresh
+`SHAKTI_API_KEY`, plus a new Vercel project for `frontend/` — none of
+which this session can perform.
+
 ## 2026-08-14 (Milestone 7 — V1 Functional QA, real end-to-end)
 
 The first real, credentialed, browser-driven pass through the complete
