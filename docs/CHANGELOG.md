@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-08-15 (Real bug found and fixed — private-repo clone auth was broken since Milestone 3A)
+
+The very first real private-repo review attempt (your own repo, via the
+production frontend) failed with `"could not clone repository"`.
+Traced to `src/git/git_client.py`'s `_auth_args`: it has been sending
+`Authorization: Bearer <token>` since Milestone 3A, but GitHub's
+smart-HTTP git clone/fetch endpoint (unlike its REST API) rejects
+Bearer and only accepts **HTTP Basic auth**, token as the password.
+Confirmed directly: a real clone of a real private repo with the exact
+old header failed with `remote: invalid credentials`; the same clone
+with a Basic-auth header (`x-access-token:<token>`, base64-encoded)
+succeeded immediately.
+
+This went undetected for three milestones because every existing test
+(`AuthArgsTests`, `AuthenticatedCloneAndFetchTests`) only ever spied on
+`_auth_args`'s own output or exercised it against a local, non-HTTP
+git remote — never against real GitHub. Milestone 3A's own report
+named this exact gap explicitly ("confirming it actually authenticates
+against a real private GitHub repo is out of scope here... that gap is
+named explicitly"); it's the first time real private-repo access was
+actually attempted.
+
+**Fixed**: `_auth_args` now sends `Authorization: Basic
+<base64(x-access-token:token)>`. Verified twice: directly with `gh`'s
+own token against a real private repo (clone succeeded), and through
+the actual `GitClient.clone_repository` code path (not a standalone
+script). Two `AuthArgsTests` updated (Bearer -> Basic), one new test
+added confirming the Basic header decodes back to the real token. 317
+backend tests pass (was 316).
+
 ## 2026-08-15 (Commit + partial deploy — real, not fully working)
 
 Per explicit instruction, all of Milestones 28-35's previously-uncommitted

@@ -1,3 +1,4 @@
+import base64
 import subprocess
 import tempfile
 import unittest
@@ -279,7 +280,14 @@ class FetchRefTests(unittest.TestCase):
 class AuthArgsTests(unittest.TestCase):
     """_auth_args is the one place a private-repo access_token turns into
     a real git invocation detail (Milestone 3A) -- a header, not a
-    token-embedded URL, so repo_url stays clean everywhere else."""
+    token-embedded URL, so repo_url stays clean everywhere else.
+
+    Basic, not Bearer (real-world fix): a real clone of a real private
+    repository confirmed git's smart-HTTP endpoint rejects
+    "Authorization: Bearer <token>" with "invalid credentials" -- only
+    HTTP Basic auth (token as password) is accepted. The original Bearer
+    version passed every test here because these tests only ever
+    inspected _auth_args' own output, never used it against real GitHub."""
 
     def setUp(self):
         self.client = GitClient()
@@ -290,10 +298,19 @@ class AuthArgsTests(unittest.TestCase):
     def test_empty_token_produces_no_extra_args(self):
         self.assertEqual(self.client._auth_args(""), [])
 
-    def test_real_token_produces_a_bearer_auth_header_config_flag(self):
+    def test_real_token_produces_a_basic_auth_header_config_flag(self):
         args = self.client._auth_args("real-token-abc")
 
-        self.assertEqual(args, ["-c", "http.extraHeader=Authorization: Bearer real-token-abc"])
+        expected_credentials = base64.b64encode(b"x-access-token:real-token-abc").decode()
+        self.assertEqual(args, ["-c", f"http.extraHeader=Authorization: Basic {expected_credentials}"])
+
+    def test_basic_auth_header_decodes_to_username_and_the_real_token(self):
+        args = self.client._auth_args("a-real-token-with-special-chars_123")
+        header_value = args[1].split("Authorization: Basic ", 1)[1]
+
+        decoded = base64.b64decode(header_value).decode()
+
+        self.assertEqual(decoded, "x-access-token:a-real-token-with-special-chars_123")
 
 
 class AuthenticatedCloneAndFetchTests(unittest.TestCase):

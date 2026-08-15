@@ -1,3 +1,4 @@
+import base64
 import subprocess
 from datetime import datetime
 
@@ -24,9 +25,19 @@ class GitClient:
         # a subprocess argument, visible via ps/procfs for the life of the
         # git process. Avoiding that needs GIT_ASKPASS-based credential
         # injection -- more machinery than this milestone's scope.
+        #
+        # Basic, not Bearer: confirmed against a real private repository
+        # that git's smart-HTTP clone/fetch rejects
+        # "Authorization: Bearer <token>" with "invalid credentials" --
+        # GitHub's git-over-HTTPS endpoint (unlike its REST API) only
+        # accepts HTTP Basic auth, token as the password, any non-empty
+        # username. This went undetected since Milestone 3A because every
+        # prior test only spied on _auth_args' own output, never actually
+        # authenticated against real GitHub with it.
         if not access_token:
             return []
-        return ["-c", f"http.extraHeader=Authorization: Bearer {access_token}"]
+        credentials = base64.b64encode(f"x-access-token:{access_token}".encode()).decode()
+        return ["-c", f"http.extraHeader=Authorization: Basic {credentials}"]
 
     def clone_repository(self, repo_url, destination, shallow=False, access_token=None):
         args = self._auth_args(access_token) + ["clone"]
