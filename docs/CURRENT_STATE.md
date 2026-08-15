@@ -1517,4 +1517,29 @@ session handling, `/review/pr`, review pipeline, or existing PR review
 UI touched — repo → PR list → PR detail → prev/next navigation is
 unaffected. 21 new frontend tests (80 total), 316 backend tests
 unchanged, build/lint clean. See `docs/CHANGELOG.md` for full detail.
+
+## The product is live and genuinely working (2026-08-15)
+
+**Frontend**: `https://intent-aware-self-healing-2.vercel.app`
+**Backend**: `https://intent-aware-self-healing.onrender.com`
+
+A real, previously-undiscovered bug was found and fixed this session:
+`GitClient._auth_args` (Milestone 3A) sent `Authorization: Bearer
+<token>` for private-repo git clone/fetch, but GitHub's smart-HTTP git
+endpoint only accepts HTTP Basic auth (token as password) — confirmed
+directly against a real private repository (`invalid credentials` with
+Bearer, success with Basic). This had been broken since Milestone 3A
+and undetected because no existing test ever authenticated against
+real GitHub with it — only this session's first real private-repo
+attempt surfaced it. Fixed in `src/git/git_client.py`; 317 tests pass.
+
+With that fix deployed and Render's `GITHUB_CLIENT_ID`/
+`GITHUB_CLIENT_SECRET`/`GITHUB_OAUTH_REDIRECT_URI`/`FRONTEND_URL`/
+`SHAKTI_API_KEY` all configured, **the complete real workflow was
+verified end to end in production**: real GitHub OAuth login, real
+repository/PR discovery, and a real `POST /review/pr` against a real
+private repository (`Saaransh27/intent-aware-self-healing#1`)
+returning a real, accurate review. See `docs/CHANGELOG.md` for exact
+detail. Every Render redeploy restarts the process and clears
+in-memory sessions (by design, accepted) — not a defect.
 Not committed or deployed as part of this milestone.

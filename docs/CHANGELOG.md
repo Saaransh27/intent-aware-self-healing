@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-08-15 (Production verified end to end, for the first time — real)
+
+After the Basic-vs-Bearer clone fix deployed and Render's `GITHUB_CLIENT_ID`/
+`GITHUB_CLIENT_SECRET`/`GITHUB_OAUTH_REDIRECT_URI`/`FRONTEND_URL`/
+`SHAKTI_API_KEY` were all set on the dashboard, the complete real
+workflow was confirmed live in production for the first time:
+
+- Real frontend: `https://intent-aware-self-healing-2.vercel.app`
+- Real backend: `https://intent-aware-self-healing.onrender.com`
+- Real GitHub OAuth login completed through the actual browser, real
+  session established.
+- Real `POST /review/pr` against a real private repository
+  (`Saaransh27/intent-aware-self-healing#1`, a real PR opened this
+  session) returned `200`, `adapter_state: "success"`,
+  `outcome: "evaluated"`, with a real, accurate verdict correctly
+  naming the one real file that PR actually changed
+  (`frontend/.gitignore`).
+
+**Noted, not a defect**: every Render redeploy restarts the process and
+wipes the in-memory session store (by design, an already-accepted V1
+limitation) — each redeploy during this verification required a fresh
+login, which is expected behavior, not a bug.
+
+This closes the deployment-configuration gap left open in Milestones 6
+and 7 ("could not be deployed/verified this session, no dashboard
+access") — deployment access became available this session, and the
+full stack is now genuinely live and functional, not just committed.
+
 ## 2026-08-15 (Real bug found and fixed — private-repo clone auth was broken since Milestone 3A)
 
 The very first real private-repo review attempt (your own repo, via the
