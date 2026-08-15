@@ -32,7 +32,18 @@ describe("PRDetail against a real, captured POST /review/pr response", () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => expect(screen.getByText(realResponse.review.sections.verdict)).toBeInTheDocument());
+    // Milestone 7 (fix pass): the model's literal verdict sentence is no
+    // longer rendered verbatim (ExecutiveSummary was removed from
+    // PRDetail, superseded by ReviewVerdict/FileOverview/SupportingDetails
+    // -- see PRDetail.jsx's own comment). A real derived verdict badge
+    // (one of exactly three) is the correct thing to wait on instead.
+    await waitFor(() =>
+      expect(
+        screen.queryByText("SAFE TO REVIEW") ||
+          screen.queryByText("REVIEWER ATTENTION") ||
+          screen.queryByText("HIGH RISK")
+      ).toBeTruthy()
+    );
 
     // Real files from the real review_context actually render.
     for (const path of realResponse.review_context.commit_summary.changed_files) {

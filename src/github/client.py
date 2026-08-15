@@ -151,6 +151,11 @@ def _pull_request_summary(payload):
         # Present on both list and single-PR payloads, unlike the three
         # fields below (Milestone 5 -- see PullRequestSummary.state).
         "state": payload["state"],
+        # Milestone 7: also present on both payloads (unlike additions/
+        # deletions/changed_files) -- lets a caller detect "this PR's
+        # code changed since a cached review was generated" by comparing
+        # against the head_sha a past PRReviewResponse recorded.
+        "head_sha": payload["head"]["sha"],
         # Real GitHub fields, but GitHub's list endpoint never includes
         # them (only the single-PR endpoint does) -- .get() naturally
         # yields None for a list-shaped payload rather than a fabricated 0.

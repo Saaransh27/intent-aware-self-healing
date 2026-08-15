@@ -16,6 +16,7 @@ const PR_DETAIL = {
   number: 42, title: "Fix the thing", author_login: "octocat",
   html_url: "https://github.com/octocat/hello-world/pull/42", state: "open", draft: false,
   additions: 10, deletions: 2, changed_files: 1, body: "Because reasons.",
+  head_sha: "head0000",
 };
 
 const PARSEABLE_RESPONSE = {
@@ -81,7 +82,12 @@ describe("PRDetail", () => {
 
     renderDetail();
 
-    await waitFor(() => expect(screen.getByText("This looks safe to merge.")).toBeInTheDocument());
+    // Milestone 7 (fix pass): the model's literal verdict sentence is no
+    // longer rendered verbatim anywhere (ExecutiveSummary was removed
+    // from PRDetail -- its content is now fully covered by ReviewVerdict/
+    // FileOverview/SupportingDetails, see PRDetail.jsx's own comment).
+    // The real, derived verdict badge is the correct thing to assert on.
+    await waitFor(() => expect(screen.getByText("SAFE TO REVIEW")).toBeInTheDocument());
   });
 
   it("shows a real error message when the review fails, not a crash", async () => {
@@ -117,7 +123,12 @@ describe("PRDetail", () => {
 
     renderDetail(42, cache);
 
-    await waitFor(() => expect(screen.getByText("This looks safe to merge.")).toBeInTheDocument());
+    // Milestone 7 (fix pass): the model's literal verdict sentence is no
+    // longer rendered verbatim anywhere (ExecutiveSummary was removed
+    // from PRDetail -- its content is now fully covered by ReviewVerdict/
+    // FileOverview/SupportingDetails, see PRDetail.jsx's own comment).
+    // The real, derived verdict badge is the correct thing to assert on.
+    await waitFor(() => expect(screen.getByText("SAFE TO REVIEW")).toBeInTheDocument());
     expect(api.fetchPRReview).not.toHaveBeenCalled();
   });
 
@@ -128,6 +139,36 @@ describe("PRDetail", () => {
 
     renderDetail(42, cache);
 
-    await waitFor(() => expect(cache.get(42)).toEqual(PARSEABLE_RESPONSE));
+    // Milestone 7 (Part 18): the cached entry also carries a real,
+    // client-stamped _reviewedAt timestamp -- the backend response itself
+    // has no such field, so this is added, not part of PARSEABLE_RESPONSE.
+    await waitFor(() => expect(cache.get(42)).toEqual({ ...PARSEABLE_RESPONSE, _reviewedAt: expect.any(Number) }));
+  });
+
+  // Milestone 7 (Part 18 / Case D): never silently show a stale analysis.
+  it("does not show a stale warning when the cached review's head_sha matches the PR's current one", async () => {
+    authApi.fetchPullRequestDetail.mockResolvedValue(PR_DETAIL); // head_sha: "head0000"
+    const cache = new Map([[42, PARSEABLE_RESPONSE]]); // also head_sha: "head0000"
+
+    renderDetail(42, cache);
+
+    await waitFor(() => expect(screen.getByText(/Based on PR state at review time/)).toBeInTheDocument());
+    expect(screen.queryByText("Review again")).not.toBeInTheDocument();
+    expect(screen.queryByText(/This PR has changed since then/)).not.toBeInTheDocument();
+  });
+
+  it("shows 'PR changed since last review' and a working 'Review again' when the head_sha no longer matches", async () => {
+    authApi.fetchPullRequestDetail.mockResolvedValue({ ...PR_DETAIL, head_sha: "newsha01" });
+    api.fetchPRReview.mockResolvedValue(PARSEABLE_RESPONSE); // still head_sha: "head0000"
+    const cache = new Map([[42, PARSEABLE_RESPONSE]]);
+
+    renderDetail(42, cache);
+
+    await waitFor(() => expect(screen.getByText(/This PR has changed since then/)).toBeInTheDocument());
+    const reviewAgainButton = screen.getByText("Review again");
+
+    reviewAgainButton.click();
+
+    await waitFor(() => expect(api.fetchPRReview).toHaveBeenCalled());
   });
 });

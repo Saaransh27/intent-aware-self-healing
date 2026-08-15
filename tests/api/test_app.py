@@ -903,7 +903,7 @@ class GithubRepoPullsTests(unittest.TestCase):
             "created_at": "2026-01-15T10:30:00Z", "updated_at": "2026-01-16T09:00:00Z",
             "head_ref": "feature", "base_ref": "main",
             "html_url": "https://github.com/octocat/hello-world/pull/42", "draft": False,
-            "state": "open",
+            "state": "open", "head_sha": "abc123def456abc123def456abc123def456abc",
             # Milestone 4: real GitHub fields, but absent on the list
             # endpoint -- None here, not fabricated zeros.
             "additions": None, "deletions": None, "changed_files": None,
@@ -939,7 +939,7 @@ class GithubRepoPullDetailTests(unittest.TestCase):
             "created_at": "2026-01-15T10:30:00Z", "updated_at": "2026-01-16T09:00:00Z",
             "head_ref": "feature", "base_ref": "main",
             "html_url": "https://github.com/octocat/hello-world/pull/42", "draft": False,
-            "state": "open",
+            "state": "open", "head_sha": "abc123def456abc123def456abc123def456abc",
             "body": "Because reasons.",
         }
         with patch.object(app_module, "get_pull_request", return_value=pr_detail) as mock_get:

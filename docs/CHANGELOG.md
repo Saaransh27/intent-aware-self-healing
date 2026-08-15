@@ -1,5 +1,89 @@
 # Changelog
 
+## 2026-08-15 (Milestone 7 precision fix pass — 7 real gaps found and fixed)
+
+Full detail: `docs/MILESTONE_7_REVIEW_INTELLIGENCE.md`. A self-audit against
+the milestone's own 25-part spec — re-reading actual rendered output
+against real data rather than trusting the first pass's own comments —
+found the initial implementation was shallower than claimed in several
+places. Each was genuinely fixed, not just re-described:
+
+- **Evidence (Part 4/5)**: was folded into the narrative body with no
+  label; now a real, separately-labeled field per finding.
+- **Test-coverage bug (Part 8)**: the plain "tests changed?" fact was only
+  shown when nothing else was — for a PR with a real test mismatch, it
+  never appeared at all. Now always shown first, unconditionally.
+- **Intent vs Implementation bug (Part 9)**: a mismatch finding's two
+  conflicting identifiers both landed under "Implementation," leaving
+  "Test" permanently empty for exactly the real case this feature exists
+  for. Fixed with real text-proximity extraction, verified against real
+  PR #3 data (`Implementation: history.high_recent_curn`,
+  `Test: history.high_recent_churn`).
+- **Behavioral change detection (Part 10, called "a core differentiator"
+  in the spec)**: only a boolean flag existed; the actual Before/After/
+  Impact/Evidence/Tests structured card was never built. Now built for
+  real, extracting genuine clauses from the model's own text (or honestly
+  showing "not stated" rather than guessing).
+- **IA ordering (Part 11)**: `ExecutiveSummary` was still rendered
+  alongside the new verdict banner, contradicting the spec's clean 10-item
+  order and duplicating content now covered elsewhere. Removed from
+  `PRDetail` (the component itself, and the legacy flow using it,
+  untouched).
+- **File Overview Risk column (Part 13)**: only the header label had been
+  changed; the actual values were still the old claims-only tier system,
+  which is silent for both real evaluation PRs (zero Python files, zero
+  deterministic claims). Properly fixed: findings are now cross-referenced
+  against `what_changed_and_why`'s real per-file breakdown to attribute
+  real severity to the real file — verified end to end, `reviewTiers.js`
+  (the file with the actual bug) now correctly shows High/Critical risk.
+- **Part 15 (reduce generic AI language)**: confirmed, stated plainly, as
+  not attempted — requires a `SYSTEM_PROMPT` change, out of scope.
+
+125 frontend tests (was 104; +21), 318 backend tests (unchanged); build
+and lint clean. All fixes re-verified against the real captured PR #2/#3
+API responses, not just at the unit level.
+
+## 2026-08-15 (Milestone 7 — Review Intelligence)
+
+Full detail: `docs/MILESTONE_7_REVIEW_INTELLIGENCE.md`. Refines the review
+UI's information architecture and analysis presentation to answer "is this
+safe, what's the evidence, what would a normal reviewer miss" — no
+architecture, reasoning pipeline, or existing working component rewritten.
+
+- **New**: `frontend/src/lib/reviewIntelligence.js` — turns the model's
+  real prose plus the real deterministic `review_context`/`observations`
+  into a verdict (`SAFE TO REVIEW`/`REVIEWER ATTENTION`/`HIGH RISK`, never
+  "SAFE TO MERGE"), per-finding severity/confidence/category/evidence,
+  intent-vs-implementation (PASS/MISMATCH), and evidence-based blind
+  spots. Confidence classification's primary signal is Prompt v1's own,
+  already-frozen four-term uncertainty vocabulary (Confirmed/Likely/Worth
+  checking/Unknown — `src/prompt/prompt_builder.py`, present since
+  Milestone 10B, never previously surfaced in the UI), with a disclosed
+  hedge-language fallback for its already-documented non-literal use.
+- **Real, load-bearing discovery**: neither evaluation PR touches Python,
+  so the deterministic reasoning layer produces zero claims for either
+  (confirmed via both PRs' real captured responses) — severity/confidence
+  had to be derived primarily from the model's own real text, not
+  deterministic claims data.
+- **One additive backend field**: `PullRequestSummary.head_sha` (present
+  on both GitHub's list and single-PR endpoints, like `state` — previously
+  unextracted) enables real stale-review detection.
+- **New components**: `ReviewVerdict`, `IntentVsImplementation`,
+  `BlindSpots`, `TestSignal`, `StaleReviewBanner`. **Restructured**:
+  `ReviewFindings` (grouped by confidence, not file-risk tier),
+  `FileOverview` (relabeled columns), `PRList` (real per-row risk status —
+  `Not reviewed` never fabricated), `PRDetail` (new information
+  architecture, real client-stamped review timestamp, "Review again" on
+  a real `head_sha` mismatch).
+- **Verified against real, captured production output** for two
+  deliberately-paired PRs (identical claimed change, one correct, one with
+  two real defects) — they render meaningfully differently: PR #2 →
+  `SAFE TO REVIEW`, 0 confirmed; PR #3 → `HIGH RISK`, 3 confirmed
+  (including the real typo and a real, previously-untested logic
+  regression, both surfaced as evidence-quoted, not merely asserted).
+- 104 frontend tests (was 80; +24), 318 backend tests (was 317; +1); build
+  and lint clean.
+
 ## 2026-08-15 (Production verified end to end, for the first time — real)
 
 After the Basic-vs-Bearer clone fix deployed and Render's `GITHUB_CLIENT_ID`/

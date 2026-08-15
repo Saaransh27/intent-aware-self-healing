@@ -1543,3 +1543,44 @@ returning a real, accurate review. See `docs/CHANGELOG.md` for exact
 detail. Every Render redeploy restarts the process and clears
 in-memory sessions (by design, accepted) — not a defect.
 Not committed or deployed as part of this milestone.
+
+## Milestone 7 — Review Intelligence
+
+The review UI now presents a real verdict (`SAFE TO REVIEW`/
+`REVIEWER ATTENTION`/`HIGH RISK`, never "SAFE TO MERGE"), per-finding
+severity/confidence/category/evidence, intent-vs-implementation
+(PASS/MISMATCH), evidence-based blind spots, and honest test/validation
+coverage signal — all derived from the existing model prose and
+deterministic `review_context`/`observations`, using Prompt v1's own
+frozen four-term uncertainty vocabulary as the primary confidence
+signal. One additive backend field (`PullRequestSummary.head_sha`)
+enables real stale-review detection ("PR changed since last review" +
+"Review again"). `PRList` now shows real per-PR risk status, never
+fabricated for an unreviewed PR. Verified against two real, deliberately
+paired PRs (identical claimed change, one correct, one with two real
+defects) — they render meaningfully differently. 104 frontend tests
+(was 80), 318 backend tests (was 317). See
+`docs/MILESTONE_7_REVIEW_INTELLIGENCE.md` for full detail, including
+known limitations (classification is a disclosed heuristic over real
+text, not a certainty).
+
+**Precision fix pass, same day**: a self-audit against the milestone's
+own spec found 7 real gaps in the first pass — Evidence wasn't actually a
+separate labeled field; the "tests changed?" fact was a real bug (only
+shown when nothing else was, so it silently vanished for a PR with a real
+test mismatch); Intent vs Implementation had a real bug attributing both
+conflicting identifiers to "Implementation" and leaving "Test" always
+empty; the Behavioral Change Before/After/Impact/Evidence/Tests card
+(called "a core differentiator") was never actually built, only a
+boolean flag; the page's information architecture still rendered the old
+`ExecutiveSummary` alongside the new verdict banner, duplicating content;
+File Overview's Risk column values were the old claims-only tier system
+relabeled, not actually fixed — silent for both real evaluation PRs
+(zero Python files, zero deterministic claims). All 7 were genuinely
+fixed and re-verified against the real captured PR #2/#3 data — e.g.
+`reviewTiers.js` (the file with the real bug) now correctly shows
+High/Critical risk in File Overview, and Intent vs Implementation
+correctly splits `history.high_recent_curn` (Implementation) from
+`history.high_recent_churn` (Test). 125 frontend tests (was 104), 318
+backend tests (unchanged). See `docs/MILESTONE_7_REVIEW_INTELLIGENCE.md`
+for the complete, itemized before/after.

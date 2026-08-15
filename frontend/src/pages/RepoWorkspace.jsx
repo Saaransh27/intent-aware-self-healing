@@ -57,6 +57,7 @@ function RepoWorkspace() {
       pullRequests={prState.data}
       errorMessage={prState.error}
       errorStatus={prState.errorStatus}
+      reviewCache={reviewCacheRef.current}
     />
   );
 }

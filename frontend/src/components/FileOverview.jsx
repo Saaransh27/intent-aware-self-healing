@@ -1,9 +1,17 @@
 import { FileText, ExternalLink } from "lucide-react";
-import { filesWithContext } from "../lib/reviewContext";
-import { fileTier, whyItMatters, FILE_TIER_RULE, REQUIRES_IMMEDIATE_REVIEW, ROUTINE } from "../lib/reviewTiers";
+import { filesWithContext, riskBearingFilePaths, reviewStrategyGroups } from "../lib/reviewContext";
+import { whyItMatters } from "../lib/reviewTiers";
 import { claimLabel, isRiskBearingClaim } from "../lib/claimVocabulary";
+import {
+  attributeFindingsToFiles,
+  fileSeverity,
+  FILE_RISK_ROUTINE,
+  SEVERITY_CRITICAL,
+  SEVERITY_HIGH,
+  SEVERITY_MEDIUM,
+} from "../lib/reviewIntelligence";
 
-const TIER_ORDER = { [REQUIRES_IMMEDIATE_REVIEW]: 0, "Standard Review": 1, [ROUTINE]: 2 };
+const RISK_ORDER = { [SEVERITY_CRITICAL]: 0, [SEVERITY_HIGH]: 1, [SEVERITY_MEDIUM]: 2, Low: 3, [FILE_RISK_ROUTINE]: 4 };
 
 function splitPath(path) {
   const lastSlash = path.lastIndexOf("/");
@@ -11,42 +19,70 @@ function splitPath(path) {
   return { dir: path.slice(0, lastSlash + 1), base: path.slice(lastSlash + 1) };
 }
 
+// The finding (if any) actually attributed to this file, highest severity
+// first -- used so "Why it matters" reflects the SAME reason the Risk
+// column escalated, rather than silently disagreeing with it.
+function topAttributedFinding(filePath, findings, severityByPath) {
+  if (!severityByPath.has(filePath)) return null;
+  const targetSeverity = severityByPath.get(filePath);
+  return findings.find(
+    (f) => f.severity === targetSeverity && (f.mentionedFiles.includes(filePath) || f.evidence.length > 0)
+  ) || null;
+}
+
 // Answers "where should I look?" as a compact, sorted table — the real
 // change_set (no more text-mining the model's prose for filenames),
-// ordered by the same real priority rule shown in Review Strategy, so the
-// files worth opening first are always at the top, not buried
-// alphabetically. Selection state is controlled by the caller because the
-// selected file also becomes context for Review Findings below.
+// ordered by real risk (Part 13: Critical/High/Medium/Low/Routine,
+// reconciled from BOTH the deterministic risk-bearing-claim signal and
+// the real findings actually attributed to each file — see
+// lib/reviewIntelligence.js's attributeFindingsToFiles/fileSeverity).
+// Selection state is controlled by the caller because the selected file
+// also becomes context for Review Findings below.
 //
 // owner/repo/headSha (Milestone 4, all optional) enable a real GitHub
 // link per file — the file's content at the PR's actual head commit,
 // the most specific correct URL constructible client-side without
 // GitHub's own (undocumented) diff-anchor hashing. Omitted entirely for
 // the old commit-review flow, which has no PR concept to link to.
-function FileOverview({ reviewContext, observations, selectedFile, onSelectFile, owner, repo, headSha }) {
+function FileOverview({ reviewContext, observations, findings, changeText, selectedFile, onSelectFile, owner, repo, headSha }) {
   if (!reviewContext) return null;
 
+  const riskBearingPaths = riskBearingFilePaths(reviewContext);
+  const { routineGroups } = reviewStrategyGroups(reviewContext);
+  const routinePaths = new Set(routineGroups.flatMap((g) => g.collapsed_group_files));
+  const changedFilePaths = reviewContext?.commit_summary?.changed_files || [];
+  const severityByPath = attributeFindingsToFiles(findings || [], changeText, changedFilePaths);
+
   const files = filesWithContext(reviewContext, observations)
-    .map((file) => ({ ...file, tier: fileTier(file.path, reviewContext) }))
-    .sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]);
+    .map((file) => ({
+      ...file,
+      risk: fileSeverity(file.path, severityByPath, riskBearingPaths.has(file.path), routinePaths.has(file.path)),
+    }))
+    .sort((a, b) => RISK_ORDER[a.risk] - RISK_ORDER[b.risk]);
 
   if (files.length === 0) return null;
 
   return (
     <section className="file-overview">
       <h2 className="section-heading">File Overview</h2>
-      <p className="section-hint">{FILE_TIER_RULE}</p>
+      <p className="section-hint">
+        Risk reconciles real deterministic risk-bearing signals with real findings actually attributed to each file — never a fabricated score.
+      </p>
       <div className="file-table">
         <div className="file-table-header" role="row">
           <span>File</span>
-          <span>Type</span>
-          <span>Priority</span>
+          <span>Change</span>
+          <span>Risk</span>
           <span>Why it matters</span>
         </div>
         {files.map((file) => {
           const isSelected = selectedFile === file.path;
           const { dir, base } = splitPath(file.path);
           const riskClaims = file.claims.filter(isRiskBearingClaim);
+          const attributedFinding = topAttributedFinding(file.path, findings || [], severityByPath);
+          const whyText = attributedFinding
+            ? attributedFinding.title || attributedFinding.body
+            : whyItMatters(file.path, reviewContext);
           const githubUrl = owner && repo && headSha
             ? `https://github.com/${owner}/${repo}/blob/${headSha}/${file.path}`
             : null;
@@ -69,11 +105,11 @@ function FileOverview({ reviewContext, observations, selectedFile, onSelectFile,
                   </span>
                   <span className="file-table-cell file-table-cell-type">{file.changeType}</span>
                   <span className="file-table-cell file-table-cell-tier">
-                    <span className={`tier-tag tier-tag-${file.tier === ROUTINE ? "routine" : file.tier === REQUIRES_IMMEDIATE_REVIEW ? "immediate" : "standard"}`}>
-                      {file.tier}
+                    <span className={file.risk === FILE_RISK_ROUTINE ? "badge badge-severity-low" : `badge badge-severity-${file.risk.toLowerCase()}`}>
+                      {file.risk}
                     </span>
                   </span>
-                  <span className="file-table-cell file-table-cell-why">{whyItMatters(file.path, reviewContext)}</span>
+                  <span className="file-table-cell file-table-cell-why">{whyText}</span>
                 </button>
                 {githubUrl && (
                   <a

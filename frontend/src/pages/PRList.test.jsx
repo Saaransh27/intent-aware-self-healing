@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import PRList from "./PRList";
+import pr3Response from "../test/fixtures/real_pr_review_response.pr3_incorrect.json";
 
 const PRS = [
   {
@@ -81,5 +82,26 @@ describe("PRList", () => {
     renderWithRouter(<PRList owner="octocat" repo="hello-world" status="success" pullRequests={PRS} />);
 
     expect(screen.getByText("Fix the thing").closest("a")).toHaveAttribute("href", "/r/octocat/hello-world/pull/42");
+  });
+
+  // Milestone 7 (Part 17/22 Case E): never fabricate a risk status for a
+  // PR nobody has reviewed yet.
+  it("shows 'Not reviewed' for a PR with no cached review, not a fabricated risk status", () => {
+    renderWithRouter(
+      <PRList owner="octocat" repo="hello-world" status="success" pullRequests={PRS} reviewCache={new Map()} />
+    );
+
+    expect(screen.getAllByText("Not reviewed")).toHaveLength(2);
+  });
+
+  it("shows the real derived risk status and real file/line counts once a review is cached", () => {
+    const cache = new Map([[43, pr3Response]]);
+    renderWithRouter(
+      <PRList owner="octocat" repo="hello-world" status="success" pullRequests={PRS} reviewCache={cache} />
+    );
+
+    expect(screen.getAllByText("Not reviewed")).toHaveLength(1);
+    expect(screen.queryByText("HIGH RISK") || screen.queryByText("REVIEWER ATTENTION")).toBeTruthy();
+    expect(screen.getByText(/3 files changed/)).toBeInTheDocument();
   });
 });

@@ -652,10 +652,6 @@ button[type="submit"]:disabled {
   opacity: 0.55;
 }
 
-.finding-card-top {
-  margin-bottom: 3px;
-}
-
 .finding-title {
   margin: 0;
   font-size: 14px;
@@ -670,12 +666,33 @@ button[type="submit"]:disabled {
   color: var(--color-text-secondary);
 }
 
+.finding-field-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  margin-top: var(--space-2);
+  margin-bottom: 2px;
+}
+
+.finding-evidence,
+.finding-affected-files {
+  margin-top: 2px;
+}
+
+.finding-evidence-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .finding-evidence-refs {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-top: var(--space-2);
 }
 
 .finding-evidence-ref {
@@ -1420,6 +1437,18 @@ button.empty-state-action {
   color: var(--color-text-muted);
 }
 
+.pr-list-row .badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  align-self: center;
+}
+
+.pr-list-not-reviewed-badge {
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+  border-style: dashed;
+}
+
 .pr-state-badge {
   display: inline-block;
   font-size: 10.5px;
@@ -1660,4 +1689,398 @@ button.empty-state-action {
     border-bottom: 1px solid var(--color-border);
     max-height: 40vh;
   }
+}
+
+/* Milestone 7 — Review Intelligence: verdict, badges, intent vs
+   implementation, blind spots, test signal. Reuses the existing token
+   set (--color-danger for the one genuinely urgent state, --color-accent
+   for attention, muted grays for everything else) -- no new palette. */
+
+.review-verdict {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  margin: var(--space-4) 0;
+  background: var(--color-surface);
+}
+
+.review-verdict-safe {
+  border-color: var(--color-border);
+}
+
+.review-verdict-attention {
+  border-color: var(--color-accent);
+  background: var(--color-accent-tint);
+}
+
+.review-verdict-high-risk {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-bg);
+}
+
+.review-verdict-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.review-verdict-icon {
+  color: var(--color-text-muted);
+}
+
+.review-verdict-safe .review-verdict-icon {
+  color: var(--color-text-muted);
+}
+
+.review-verdict-attention .review-verdict-icon {
+  color: var(--color-accent);
+}
+
+.review-verdict-high-risk .review-verdict-icon {
+  color: var(--color-danger);
+}
+
+.review-verdict-level {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-text);
+}
+
+.review-verdict-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  font-size: 12px;
+}
+
+.verdict-count {
+  color: var(--color-text-muted);
+}
+
+.verdict-count-confirmed {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.verdict-count-strong {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.review-verdict-headlines {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.review-verdict-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.review-verdict-headline-text {
+  color: var(--color-text);
+}
+
+.review-verdict-next {
+  margin: var(--space-3) 0 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* Shared badges -- severity / confidence / category, used by
+   ReviewVerdict and ReviewFindings alike so the same finding looks the
+   same wherever it appears. */
+
+.badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--color-border-strong);
+  white-space: nowrap;
+}
+
+.badge-severity-critical,
+.badge-severity-high {
+  color: var(--color-danger);
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-bg);
+}
+
+.badge-severity-medium {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: var(--color-accent-tint);
+}
+
+.badge-severity-low {
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+
+.badge-confidence-confirmed {
+  color: var(--color-danger);
+  border-color: var(--color-danger-border);
+}
+
+.badge-confidence-strong-evidence {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.badge-confidence-needs-verification {
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+
+.badge-category {
+  color: var(--color-text-secondary);
+  border-style: dashed;
+}
+
+.finding-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: var(--space-2);
+}
+
+.findings-group-label-confirmed {
+  color: var(--color-danger);
+}
+
+.findings-group-label-strong-evidence {
+  color: var(--color-accent);
+}
+
+.findings-group-label-needs-verification {
+  color: var(--color-text-secondary);
+}
+
+.findings-group-label-informational {
+  color: var(--color-text-muted);
+}
+
+.findings-group-informational {
+  opacity: 0.75;
+}
+
+.finding-next-action {
+  margin: var(--space-2) 0 0;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+
+/* Intent vs Implementation */
+
+.intent-vs-implementation {
+  margin: var(--space-5) 0;
+}
+
+.intent-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+}
+
+.intent-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: var(--space-3);
+  font-size: 13px;
+  align-items: baseline;
+}
+
+.intent-label {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.intent-value {
+  color: var(--color-text);
+}
+
+.intent-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-xs);
+  padding: 1px 5px;
+  margin-right: 6px;
+}
+
+.intent-consistency {
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+}
+
+.intent-consistency-pass {
+  color: var(--color-text-secondary);
+}
+
+.intent-consistency-mismatch {
+  color: var(--color-danger);
+}
+
+/* Blind spots */
+
+.blind-spots {
+  margin: var(--space-5) 0;
+}
+
+.blind-spots-empty {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+.blind-spots-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.blind-spot-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 2px solid var(--color-accent);
+  padding-left: var(--space-3);
+  font-size: 13px;
+}
+
+.blind-spot-title {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.blind-spot-body {
+  color: var(--color-text-secondary);
+}
+
+/* Part 10: Behavioral change detected card */
+
+.blind-spot-item-behavioral {
+  padding-bottom: var(--space-2);
+}
+
+.behavioral-change-badge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+  background: var(--color-accent-tint);
+  border-radius: var(--radius-xs);
+  padding: 2px 6px;
+  margin-bottom: 2px;
+}
+
+.behavioral-detail-grid {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 4px var(--space-3);
+  margin: var(--space-2) 0 0;
+}
+
+.behavioral-detail-grid dt {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.behavioral-detail-grid dd {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.behavioral-detail-grid dd em {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Test / validation signal */
+
+.test-signal {
+  margin: var(--space-5) 0;
+}
+
+.test-signal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.test-signal-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  border-left: 2px solid var(--color-border);
+  padding-left: var(--space-3);
+}
+
+.test-signal-item-warning {
+  border-left-color: var(--color-danger-border);
+}
+
+.test-signal-title {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.test-signal-body {
+  color: var(--color-text-secondary);
+}
+
+/* Stale-review banner (Part 18) */
+
+.stale-review-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  padding: var(--space-2) 0;
+}
+
+.stale-review-banner-stale {
+  color: var(--color-danger);
+}
+
+.stale-review-action {
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11.5px;
 }

@@ -31,7 +31,7 @@ _PR_PAYLOAD = {
     "user": {"login": "octocat"},
     "created_at": "2026-01-15T10:30:00Z",
     "updated_at": "2026-01-16T09:00:00Z",
-    "head": {"ref": "feature-branch"},
+    "head": {"ref": "feature-branch", "sha": "abc123def456abc123def456abc123def456abc"},
     "base": {"ref": "main"},
     "html_url": "https://github.com/octocat/hello-world/pull/42",
     "draft": False,
@@ -113,12 +113,24 @@ class ListOpenPullRequestsTests(unittest.TestCase):
             "html_url": "https://github.com/octocat/hello-world/pull/42",
             "draft": False,
             "state": "open",
+            "head_sha": "abc123def456abc123def456abc123def456abc",
             # GitHub's list endpoint never returns these -- None (not 0),
             # since _PR_PAYLOAD (a real list-shaped payload) has no such keys.
             "additions": None,
             "deletions": None,
             "changed_files": None,
         }])
+
+    @patch("src.github.client.urllib.request.urlopen")
+    def test_head_sha_is_present_on_the_list_endpoint(self, mock_urlopen):
+        # Milestone 7: unlike additions/deletions/changed_files, GitHub's
+        # list endpoint really does include head.sha -- confirmed real,
+        # not fabricated when absent from a list-shaped payload.
+        mock_urlopen.return_value = _fake_response([_PR_PAYLOAD])
+
+        result = list_open_pull_requests("real-token", "octocat", "hello-world")
+
+        self.assertEqual(result[0]["head_sha"], "abc123def456abc123def456abc123def456abc")
 
     @patch("src.github.client.urllib.request.urlopen")
     def test_requests_open_state_for_the_given_repo(self, mock_urlopen):

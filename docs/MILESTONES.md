@@ -3138,3 +3138,105 @@ backend requests during the session.
 **Not yet true, per `PROJECT.md` rule 4**: not committed, not deployed.
 The claim-id-leak finding remains open, same status it's had since
 Milestone 16B.
+
+## Milestone 36 — Milestone 7: Review Intelligence
+
+**Status: Complete** (2026-08-15). A refinement milestone, not feature
+development: no architecture, reasoning pipeline, or existing working
+component was rewritten. Full detail:
+`docs/MILESTONE_7_REVIEW_INTELLIGENCE.md`.
+
+New `frontend/src/lib/reviewIntelligence.js` turns the model's existing
+prose plus the existing deterministic `review_context`/`observations`
+into a verdict (`SAFE TO REVIEW`/`REVIEWER ATTENTION`/`HIGH RISK`,
+deliberately never "SAFE TO MERGE"), per-finding severity/confidence/
+category/evidence, intent-vs-implementation consistency, evidence-based
+blind spots, and honest test-coverage signal. Confidence classification's
+primary signal is Prompt v1's own frozen four-term uncertainty vocabulary
+(Confirmed/Likely/Worth checking/Unknown, present in `SYSTEM_PROMPT`
+since Milestone 10B but never previously surfaced in the UI), with a
+disclosed hedge-language fallback for its already-documented non-literal
+use — discovered necessary only after confirming, against two real
+captured API responses, that neither evaluation PR's files are Python,
+so the deterministic reasoning layer contributes zero claims to either
+(ADR-005's Python-only semantic analysis).
+
+One additive backend field, `PullRequestSummary.head_sha` (present on
+both GitHub's list and single-PR endpoints, previously unextracted),
+enables real "PR changed since last review" detection. New components:
+`ReviewVerdict`, `IntentVsImplementation`, `BlindSpots`, `TestSignal`,
+`StaleReviewBanner`. Restructured: `ReviewFindings` (grouped by
+confidence, not the old file-risk tier), `FileOverview` (relabeled
+columns only), `PRList` (real per-row risk status, `Not reviewed` never
+fabricated for a PR with no cached review), `PRDetail` (new information
+architecture in the specified order, a real client-stamped review
+timestamp, "Review again" on a real `head_sha` mismatch).
+
+**Verified against two real, deliberately-paired PRs** (identical
+claimed change/title/file set — one correct, ground truth 9/9 tests
+pass; one with two real, verified defects: a typo that fails a real
+test, plus an untested logic regression): they render meaningfully
+differently. PR #2 → `SAFE TO REVIEW`, 0 confirmed findings, no
+fabricated blind spot, Intent vs Implementation PASS. PR #3 →
+`HIGH RISK`, 3 confirmed findings (the rule-description update
+correctly kept informational, not presented as a defect), the
+tier-ordering bug surfaced as a behavioral blind spot, Intent vs
+Implementation MISMATCH quoting the real conflicting identifiers
+verbatim.
+
+104 frontend tests (was 80; +24 — 17 in a new `reviewIntelligence.test.js`
+run against the exact real captured text from both PRs, 3 rendering both
+real captured full API responses through `PRDetail` end to end, plus
+PRList/PRDetail regression coverage), 318 backend tests (was 317; +1);
+build and lint clean.
+
+**Explicitly out of scope, verified not needed**: repository selection
+(Part 16) already satisfies "which repo am I reviewing" via `PRHeader`;
+no change made. No comments system, chat agent, AI fix generation,
+dashboards, or deployment work added.
+
+**Known limitation, stated plainly**: severity/confidence/category
+classification is a disclosed heuristic over the model's real text, not
+a certainty — validated against exactly two deliberately-paired real
+PRs, not yet evaluated against a larger, more diverse sample the way
+Milestone 32's hardening pass was.
+
+## Milestone 38 — Milestone 7 precision fix pass
+
+**Status: Complete** (2026-08-15, same day as Milestone 36). Triggered
+by a direct challenge to re-verify rather than trust the first pass's own
+claims — re-reading actual rendered output against real data found 7 of
+the 25 parts were shallower than reported. Full itemized detail:
+`docs/MILESTONE_7_REVIEW_INTELLIGENCE.md`'s "Precision re-review" section.
+
+Genuinely fixed, each re-verified against the real captured PR #2/#3
+data: Evidence made a real, separately-labeled per-finding field (was
+folded into prose); a real bug in the test-coverage signal fixed (the
+plain "tests changed?" fact was silently dropped whenever any other line
+existed — exactly the case for a PR with a real test mismatch); a real
+bug in Intent vs Implementation fixed (both conflicting identifiers from
+a mismatch finding landed under "Implementation," "Test" always empty —
+now correctly split via real text-proximity extraction); the Behavioral
+Change Before/After/Impact/Evidence/Tests card actually built for the
+first time (previously only a boolean flag existed, despite the spec
+calling this "a core differentiator"); the information architecture
+actually cleaned up (`ExecutiveSummary` removed from `PRDetail` — its
+content was fully duplicated by the new verdict banner, the fixed File
+Overview, and the existing Supporting Details accordion); File Overview's
+Risk column properly fixed rather than cosmetically relabeled (values
+were still the old claims-only tier system, silent for both real
+evaluation PRs since neither has deterministic claims — now
+cross-referenced against `what_changed_and_why`'s real per-file
+breakdown, verified to correctly show `reviewTiers.js` at High/Critical
+risk).
+
+One item confirmed as a deliberate non-implementation, stated more
+plainly than before: Part 15 (reducing generic AI hedge language)
+requires a `SYSTEM_PROMPT` change and was not attempted, consistent with
+this milestone's own scope constraints.
+
+125 frontend tests (was 104; +21 — new dedicated test files for
+`BlindSpots`, `TestSignal`, `ReviewFindings`, and `FileOverview` that
+didn't exist before this pass, plus 12 new cases in
+`reviewIntelligence.test.js`), 318 backend tests (unchanged, no backend
+code touched in this fix pass); build and lint clean.

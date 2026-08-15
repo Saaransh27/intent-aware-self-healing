@@ -595,3 +595,19 @@ live browser session.
 
 **Next**: no further milestone (V1 hardening or deployment) has been
 started, per explicit instruction to stop here.
+
+---
+
+**Update (2026-08-15, added during a later documentation audit — not a
+rewrite of the above, which remains an accurate record of what was true
+on 2026-08-11):** the "verification is honestly partial" limitation
+named above no longer holds. A real GitHub OAuth App was registered and
+the complete login → repository list → PR list → PR review flow was
+exercised end to end in a real, deployed browser session (see
+`docs/CHANGELOG.md`, 2026-08-15 entries, and `docs/MILESTONE_6_RELEASE_READINESS.md`).
+This document's own three original workstreams (§0) are now all
+complete and were followed by several further refinement milestones
+(hardening, release readiness, selective repository workspace, review
+intelligence) — tracked from here on in `docs/MILESTONES.md` and
+`docs/CHANGELOG.md` rather than as further entries in this document,
+whose own defined scope ended at Milestone 4 above.

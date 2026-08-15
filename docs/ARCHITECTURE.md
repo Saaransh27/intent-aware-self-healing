@@ -389,6 +389,72 @@ were never committed until this session — and, per explicit user
 instruction mid-session, most of that work remains staged-or-untracked
 rather than committed. Nothing from Milestones 28–33 is deployed.
 
+## Milestone 36 (Milestone 7: Review Intelligence)
+
+A new derivation layer, `frontend/src/lib/reviewIntelligence.js`, sitting
+entirely on the frontend between the existing `POST /review/pr` response
+and the `PRDetail` component tree — no backend reasoning/prompt/adapter/
+review_engine code was touched. It turns the model's existing five prose
+sections plus the existing deterministic `review_context`/`observations`
+into a verdict, per-finding severity/confidence/category/evidence,
+intent-vs-implementation consistency, and evidence-based blind spots.
+Confidence classification's primary signal is `src/prompt/prompt_builder.py`'s
+own frozen four-term uncertainty vocabulary (Confirmed/Likely/Worth
+checking/Unknown, present since Milestone 10B but never previously
+surfaced anywhere in either frontend), with a disclosed hedge-language
+heuristic as fallback for that vocabulary's already-documented non-literal
+use in practice.
+
+One additive backend field: `PullRequestSummary.head_sha`
+(`src/api/models.py`, `src/github/client.py`) — present on both GitHub's
+list and single-PR endpoints, like `state`, previously unextracted. Exists
+solely to let the frontend detect a PR's code changing since a cached
+review was generated; no other backend behavior changed.
+
+`ReviewFindings.jsx` now groups by confidence (Confirmed → Strong
+evidence → Needs verification, informational findings shown separately)
+instead of the file-risk-tier grouping introduced in Milestone 31 — that
+older tiering (`reviewTiers.js`'s `findingTier`/`fileTier`) is still used
+as a secondary severity signal when real deterministic claims exist, not
+replaced. See `docs/MILESTONE_7_REVIEW_INTELLIGENCE.md` for the full
+component list and the real, load-bearing discovery that motivated this
+design: neither of this milestone's two real evaluation PRs touches a
+Python file, so the deterministic reasoning layer (Python-only semantic
+analysis, ADR-005) contributes zero claims to either — confirmed directly
+against both PRs' real captured API responses.
+
+## Milestone 38 (Milestone 7 precision fix pass)
+
+A same-day self-audit of Milestone 36's own claims against the real
+rendered output (not just the code's own comments) found the File
+Overview Risk-column fix had only relabeled the header — the actual
+values were still `reviewTiers.js`'s claims-only tier system, silent for
+both real evaluation PRs. Properly fixed with a new
+`attributeFindingsToFiles` (`reviewIntelligence.js`): cross-references
+each finding's quoted identifiers against each changed file's own
+identifiers, extracted from `what_changed_and_why`'s real per-file
+bulleted breakdown (confirmed to name each file explicitly, unlike
+individual `what_deserves_attention_ranked` findings, which generally
+don't). `fileSeverity` reconciles this attribution with the existing
+risk-bearing-claim signal and the coverage ledger's Routine designation.
+
+The same audit also found the page's information architecture still
+rendered `ExecutiveSummary` alongside the new verdict banner (contradicting
+the milestone's own specified section order and duplicating content now
+covered by the verdict banner, the fixed File Overview, and the existing
+Supporting Details accordion) — `ExecutiveSummary` is no longer called
+from `PRDetail`; the component itself and the legacy commit-review flow
+using it are untouched. Two further real bugs (not just gaps) were found
+and fixed: `TestSignal.jsx` silently dropped the plain "tests changed?"
+fact whenever any other line existed, and `deriveIntentVsImplementation`
+attributed both sides of a real conflicting-identifier pair to
+"Implementation," leaving "Test" always empty — both fixed and
+re-verified against real PR #3 data. The Behavioral Change detection
+(Part 10) gained the actual Before/After/Impact/Evidence/Tests structured
+extraction it was always supposed to have (`buildBehavioralDetail`),
+rendered by `BlindSpots.jsx`. See `docs/MILESTONE_7_REVIEW_INTELLIGENCE.md`
+for the complete itemized list.
+
 ## Not yet built
 
 No embeddings, no context graphs, no evaluation pipeline. As of Milestone 14B, a

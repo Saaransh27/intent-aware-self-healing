@@ -230,6 +230,11 @@ class PullRequestSummary(BaseModel):
     # to distinguish a closed/merged PR from an open one and defaulted
     # to showing "Open" for anything not explicitly draft.
     state: str
+    # Milestone 7: present on both the list and single-PR endpoints (like
+    # state, unlike additions/deletions/changed_files below) -- the PR's
+    # current head commit, so a client can tell whether a cached review
+    # (which recorded the head_sha it reviewed) is now stale.
+    head_sha: str
     # Milestone 4: real GitHub fields, but only present on the single-PR
     # endpoint -- GitHub's list endpoint never returns them, so every PR
     # in a list response has these as None. Never coerced to 0; None here

@@ -1,0 +1,52 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import TestSignal from "./TestSignal";
+import { buildFindings, deriveIntentVsImplementation } from "../lib/reviewIntelligence";
+import pr3Response from "../test/fixtures/real_pr_review_response.pr3_incorrect.json";
+
+// Real bug found on re-review: "Tests changed" used to be shown ONLY when
+// no other line existed, so a PR with a real test mismatch never
+// displayed the basic, honest fact that it touched test files at all.
+describe("TestSignal", () => {
+  it("always shows the plain 'Tests changed: yes' fact, even alongside a real test mismatch warning", () => {
+    const findings = buildFindings(pr3Response.review.sections.what_deserves_attention_ranked, pr3Response.review_context);
+    const intentVsImplementation = deriveIntentVsImplementation("Treat history.high_recent_churn as risk-bearing", findings);
+
+    render(
+      <TestSignal
+        observations={pr3Response.observations}
+        findings={findings}
+        intentVsImplementation={intentVsImplementation}
+      />
+    );
+
+    expect(screen.getByText("This PR modifies test files.")).toBeInTheDocument();
+    expect(screen.getByText("Test mismatch detected")).toBeInTheDocument();
+  });
+
+  it("shows 'tests not changed' honestly when a PR touches no test files and has no findings", () => {
+    render(
+      <TestSignal
+        observations={{ change_categories: { touches_tests: false } }}
+        findings={[]}
+        intentVsImplementation={{ consistency: "PASS", testDetail: [], implementationDetail: [] }}
+      />
+    );
+
+    expect(screen.getByText("No relevant test coverage identified")).toBeInTheDocument();
+    expect(screen.queryByText("This PR modifies test files.")).not.toBeInTheDocument();
+  });
+
+  it("shows the plain 'tests changed' fact alone when tests changed and nothing else is flagged", () => {
+    render(
+      <TestSignal
+        observations={{ change_categories: { touches_tests: true } }}
+        findings={[]}
+        intentVsImplementation={{ consistency: "PASS", testDetail: [], implementationDetail: [] }}
+      />
+    );
+
+    expect(screen.getByText("This PR modifies test files.")).toBeInTheDocument();
+    expect(screen.queryByText("Test mismatch detected")).not.toBeInTheDocument();
+  });
+});

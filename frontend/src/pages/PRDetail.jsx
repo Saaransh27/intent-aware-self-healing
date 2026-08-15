@@ -1,20 +1,47 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fetchPullRequestDetail, loginUrl } from "../lib/authApi";
 import { fetchPRReview } from "../lib/api";
+import { buildFindings, deriveVerdict, deriveIntentVsImplementation, deriveBlindSpots } from "../lib/reviewIntelligence";
 import PRHeader from "../components/PRHeader";
 import PRNavigation from "../components/PRNavigation";
 import ReviewLoadingState from "../components/ReviewLoadingState";
 import EmptyState from "../components/EmptyState";
-import ExecutiveSummary from "../components/ExecutiveSummary";
+import ReviewVerdict from "../components/ReviewVerdict";
+import StaleReviewBanner from "../components/StaleReviewBanner";
 import CommitStats from "../components/CommitStats";
-import FileOverview from "../components/FileOverview";
+import IntentVsImplementation from "../components/IntentVsImplementation";
 import ReviewFindings from "../components/ReviewFindings";
+import BlindSpots from "../components/BlindSpots";
+import TestSignal from "../components/TestSignal";
+import FileOverview from "../components/FileOverview";
 import SupportingDetails from "../components/SupportingDetails";
 
 // The review workspace for one PR. Two independent fetches, deliberately
 // not chained: PR metadata (fast, real additions/deletions/changed_files
 // for PRHeader) and the review itself (slow — a real clone + LLM call).
 // The header doesn't wait on the review to render.
+//
+// Milestone 7 (Review Intelligence): the information architecture below
+// follows the order the milestone spec fixed — PR Header, Review Verdict,
+// Intent vs Implementation, Findings, Blind Spots, Test Coverage, File
+// Overview, Supporting Details — reusing the same visual design system
+// throughout. findings/verdict/intentVsImplementation/blindSpots are all
+// derived once per render from the real response (see
+// lib/reviewIntelligence.js) and threaded to every component that needs
+// them, rather than each component re-parsing the raw text itself.
+//
+// Fix pass (precision re-review): ExecutiveSummary was originally still
+// rendered here too, directly under ReviewVerdict -- its own content
+// (verdict prose, priority files, change bullets) turned out to be fully
+// duplicated by ReviewVerdict (verdict), the now-fixed FileOverview (real
+// risk-sorted files), and SupportingDetails' own "What changed and why"
+// accordion item -- exactly the redundant-card clutter the spec warned
+// against, and not one of the 10 named sections. Removed here only;
+// ExecutiveSummary.jsx itself is untouched and still used by the legacy
+// commit-review flow. CommitStats stays, positioned before Review
+// Verdict -- it is purely objective per-commit metadata (files/lines/
+// tests changed), not an assessment, so it reads as an extension of the
+// header rather than a competing verdict-like section.
 function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
   const [prDetail, setPrDetail] = useState(null);
   const [detailError, setDetailError] = useState(null);
@@ -26,6 +53,7 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
   const [reviewErrorStatus, setReviewErrorStatus] = useState(null);
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,8 +97,12 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
     })
       .then((body) => {
         if (cancelled) return;
-        reviewCache.set(prNumber, body);
-        setReviewData(body);
+        // Part 18: the backend response itself carries no timestamp --
+        // this is the real client-side moment the review was actually
+        // received, stamped once, here, not recomputed on every render.
+        const stamped = { ...body, _reviewedAt: Date.now() };
+        reviewCache.set(prNumber, stamped);
+        setReviewData(stamped);
         setReviewStatus("success");
       })
       .catch((err) => {
@@ -85,12 +117,32 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
     return () => {
       cancelled = true;
     };
-  }, [owner, repo, prNumber, reviewCache]);
+  }, [owner, repo, prNumber, reviewCache, refreshToken]);
+
+  // Part 18: "Review again" -- discards the cached (now-stale) review and
+  // re-runs the effect above by bumping refreshToken; the effect's own
+  // cache lookup will naturally miss and fetch fresh, no special-casing.
+  function handleReviewAgain() {
+    reviewCache.delete(prNumber);
+    setRefreshToken((token) => token + 1);
+  }
 
   const sections = reviewData?.review?.sections ?? null;
   const hasSections = reviewData?.review?.parsed && sections;
   const reviewContext = reviewData?.review_context ?? null;
   const observations = reviewData?.observations ?? null;
+
+  const findings = useMemo(
+    () => (hasSections ? buildFindings(sections.what_deserves_attention_ranked, reviewContext) : []),
+    [hasSections, sections, reviewContext]
+  );
+  const verdict = useMemo(() => deriveVerdict(findings), [findings]);
+  const claimedIntent = prDetail?.title || reviewContext?.commit_summary?.message?.split("\n")[0] || "";
+  const intentVsImplementation = useMemo(
+    () => deriveIntentVsImplementation(claimedIntent, findings),
+    [claimedIntent, findings]
+  );
+  const blindSpots = useMemo(() => deriveBlindSpots(findings), [findings]);
 
   return (
     <div className="pr-detail-page">
@@ -120,22 +172,33 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
 
       {reviewStatus === "success" && hasSections && (
         <>
-          <CommitStats reviewContext={reviewContext} observations={observations} />
-          <ExecutiveSummary
-            verdictText={sections.verdict}
-            changeText={sections.what_changed_and_why}
-            reviewContext={reviewContext}
-            showIdentity={false}
+          <StaleReviewBanner
+            reviewedAt={reviewData._reviewedAt}
+            reviewedHeadSha={reviewData.head_sha}
+            currentHeadSha={prDetail?.head_sha}
+            onReviewAgain={handleReviewAgain}
           />
+          <CommitStats reviewContext={reviewContext} observations={observations} />
+          <ReviewVerdict verdict={verdict} findings={findings} />
+          <IntentVsImplementation intentVsImplementation={intentVsImplementation} />
           <ReviewFindings
             rawText={sections.what_deserves_attention_ranked}
+            findings={findings}
             selectedFile={selectedFile}
             onSelectFile={setSelectedFile}
             reviewContext={reviewContext}
           />
+          <BlindSpots blindSpots={blindSpots} />
+          <TestSignal
+            observations={observations}
+            findings={findings}
+            intentVsImplementation={intentVsImplementation}
+          />
           <FileOverview
             reviewContext={reviewContext}
             observations={observations}
+            findings={findings}
+            changeText={sections.what_changed_and_why}
             selectedFile={selectedFile}
             onSelectFile={setSelectedFile}
             owner={owner}
