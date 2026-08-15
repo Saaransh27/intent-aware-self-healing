@@ -20,8 +20,8 @@ export const STANDARD_REVIEW = "Standard Review";
 export const ROUTINE = "Routine";
 
 export const FILE_TIER_RULE =
-  "Requires Immediate Review = a public-contract change, a first-touch-by-this-author or hot-file " +
-  "signal, or a missing expected co-change partner — and isn't already marked routine below. " +
+  "Requires Immediate Review = a public-contract change, a first-touch-by-this-author, hot-file, or " +
+  "high-recent-churn signal, or a missing expected co-change partner — and isn't already marked routine below. " +
   "Routine = the backend's own coverage ledger already collapsed it as safe to skim. " +
   "Standard Review = everything else.";
 
@@ -83,7 +83,7 @@ export function whyItMatters(filePath, reviewContext) {
 // "how much attention does this need" phrase that's always traceable back
 // to the exact same per-file tiers shown in File Overview.
 export function highestTier(tiers) {
-  if (tiers.includes(REQUIRES_IMMEDIATE_REVIEW)) return REQUIRES_IMMEDIATE_REVIEW;
   if (tiers.includes(STANDARD_REVIEW)) return STANDARD_REVIEW;
+  if (tiers.includes(REQUIRES_IMMEDIATE_REVIEW)) return REQUIRES_IMMEDIATE_REVIEW;
   return ROUTINE;
 }
