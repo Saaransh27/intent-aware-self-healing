@@ -20,8 +20,8 @@ export const STANDARD_REVIEW = "Standard Review";
 export const ROUTINE = "Routine";
 
 export const FILE_TIER_RULE =
-  "Requires Immediate Review = a public-contract change, a first-touch-by-this-author or hot-file " +
-  "signal, or a missing expected co-change partner — and isn't already marked routine below. " +
+  "Requires Immediate Review = a public-contract change, a first-touch-by-this-author, hot-file, or " +
+  "high-recent-churn signal, or a missing expected co-change partner — and isn't already marked routine below. " +
   "Routine = the backend's own coverage ledger already collapsed it as safe to skim. " +
   "Standard Review = everything else.";
 
