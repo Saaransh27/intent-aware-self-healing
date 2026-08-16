@@ -1,1 +1,302 @@
-{"repository_url":"https://github.com/Saaransh27/intent-aware-self-healing","commit_hash":"d6e4e3ed513d5ef3b26fb9f35d7a3a8cc76adcef","outcome":"evaluated","adapter_state":"success","review":{"raw":"### Verdict\nThe commit warrants reviewer attention because it introduces a new risk‑bearing claim identifier that must be verified against the backend’s output.\n\n### What changed and why\n* Added `\"history.high_recent_churn\"` to the set of risk‑bearing claim IDs, so the frontend will treat files with this historical signal as high risk.  \n* Updated the human‑readable rule description to mention the new “high‑recent‑churn” signal.  \n* Added a regression test that asserts the new claim is recognized as risk‑bearing.  \nThe author’s intent is to surface a backend‑computed churn signal that was previously ignored.\n\n### What deserves attention, ranked\n1. **Identifier consistency** – Confirm that the string `\"history.high_recent_churn\"` exactly matches the identifier produced by the backend; a typo would cause the frontend to miss a genuine risk signal.  \n2. **Membership logic** – Verify that the function which checks risk‑bearing claims correctly includes the newly added identifier; otherwise the description change would be misleading.  \n3. **Description string usage** – Ensure that the modified rule text is not parsed elsewhere (e.g., UI components) in a way that could break because of the added phrase “high‑recent‑churn signal”.  \n\n### Open questions\n* **Does the backend emit the claim identifier `history.high_recent_churn`?** – If the backend uses a different spelling, the claim will never be triggered.  \n* **Does `isRiskBearingClaim` simply test set membership, and thus automatically handle the new entry?** – The test assumes this, but the implementation is not shown.  \n* **Are there any other parts of the codebase that rely on the exact wording of `FILE_TIER_RULE`?** – The change is textual; any dependent parsing could be affected.  \n\n### Minor notes\n* The added test confirming the new claim is risk‑bearing is present and syntactically correct.  \n* The only functional change is the inclusion of a new identifier; no other logic was altered.","parsed":true,"sections":{"verdict":"The commit warrants reviewer attention because it introduces a new risk‑bearing claim identifier that must be verified against the backend’s output.","what_changed_and_why":"* Added `\"history.high_recent_churn\"` to the set of risk‑bearing claim IDs, so the frontend will treat files with this historical signal as high risk.  \n* Updated the human‑readable rule description to mention the new “high‑recent‑churn” signal.  \n* Added a regression test that asserts the new claim is recognized as risk‑bearing.  \nThe author’s intent is to surface a backend‑computed churn signal that was previously ignored.","what_deserves_attention_ranked":"1. **Identifier consistency** – Confirm that the string `\"history.high_recent_churn\"` exactly matches the identifier produced by the backend; a typo would cause the frontend to miss a genuine risk signal.  \n2. **Membership logic** – Verify that the function which checks risk‑bearing claims correctly includes the newly added identifier; otherwise the description change would be misleading.  \n3. **Description string usage** – Ensure that the modified rule text is not parsed elsewhere (e.g., UI components) in a way that could break because of the added phrase “high‑recent‑churn signal”.","open_questions":"* **Does the backend emit the claim identifier `history.high_recent_churn`?** – If the backend uses a different spelling, the claim will never be triggered.  \n* **Does `isRiskBearingClaim` simply test set membership, and thus automatically handle the new entry?** – The test assumes this, but the implementation is not shown.  \n* **Are there any other parts of the codebase that rely on the exact wording of `FILE_TIER_RULE`?** – The change is textual; any dependent parsing could be affected.","minor_notes":"* The added test confirming the new claim is risk‑bearing is present and syntactically correct.  \n* The only functional change is the inclusion of a new identifier; no other logic was altered."}},"findings":[],"validation":{"outcome":"invalid","findings":[{"rule":"literal_claim_id_leak","severity":"ERROR","message":"Internal claim id 'history.high_recent_churn' appears verbatim in the response.","location":4},{"rule":"literal_claim_id_leak","severity":"ERROR","message":"Internal claim id 'history.high_recent_churn' appears verbatim in the response.","location":10},{"rule":"literal_claim_id_leak","severity":"ERROR","message":"Internal claim id 'history.high_recent_churn' appears verbatim in the response.","location":15}]},"review_context":{"commit_summary":{"message":"Treat history.high_recent_churn as risk-bearing\n\n## Summary\n- \\`history.high_recent_churn\\` (5+ changes to a file in the last 30 days) is already computed by the backend but was never included in the frontend's risk-bearing claim set, so it never affected file tiering.\n- Added it to \\`RISK_BEARING_CLAIM_IDS\\` alongside the existing \\`history.hot_file\\`/\\`history.first_author_touch\\` signals, updated \\`FILE_TIER_RULE\\`'s description to match, and added a regression test.\n\n## Test plan\n- [x] \\`claimVocabulary.test.js\\` passes (9/9), including the new test\n- [x] \\`FILE_TIER_RULE\\`'s text matches the actual behavior\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)","changed_files":["frontend/src/lib/claimVocabulary.js","frontend/src/lib/claimVocabulary.test.js","frontend/src/lib/reviewTiers.js"],"added_files":[],"deleted_files":[],"modified_files":["frontend/src/lib/claimVocabulary.js","frontend/src/lib/claimVocabulary.test.js","frontend/src/lib/reviewTiers.js"],"renamed_files":[]},"commit_claims":[{"claim":"shape.narrow_change","scope":{"level":"commit","file_path":null,"qualified_name":null},"confidence":"inferred","basis":["change_set"],"module":"change_shape"},{"claim":"shape.heterogeneous_categories","scope":{"level":"commit","file_path":null,"qualified_name":null},"confidence":"observed","basis":["file_classification"],"module":"change_shape"},{"claim":"shape.touches_tests","scope":{"level":"commit","file_path":null,"qualified_name":null},"confidence":"observed","basis":["change_categories"],"module":"change_shape"},{"claim":"verification.test_files_changed","scope":{"level":"commit","file_path":null,"qualified_name":null},"confidence":"observed","basis":["file_classification"],"module":"verification_coverage"}],"file_claims":{},"gaps":{"commit":[],"files":{"frontend/src/lib/claimVocabulary.js":[{"reason":"cannot_assess_contract","scope":{"level":"file","file_path":"frontend/src/lib/claimVocabulary.js","qualified_name":null},"missing":["semantic_analysis"],"module":"contract_stability"},{"reason":"cannot_assess_body_evidence","scope":{"level":"file","file_path":"frontend/src/lib/claimVocabulary.js","qualified_name":null},"missing":["semantic_analysis"],"module":"body_evidence"}],"frontend/src/lib/claimVocabulary.test.js":[{"reason":"cannot_assess_contract","scope":{"level":"file","file_path":"frontend/src/lib/claimVocabulary.test.js","qualified_name":null},"missing":["semantic_analysis"],"module":"contract_stability"},{"reason":"cannot_assess_body_evidence","scope":{"level":"file","file_path":"frontend/src/lib/claimVocabulary.test.js","qualified_name":null},"missing":["semantic_analysis"],"module":"body_evidence"}],"frontend/src/lib/reviewTiers.js":[{"reason":"cannot_assess_contract","scope":{"level":"file","file_path":"frontend/src/lib/reviewTiers.js","qualified_name":null},"missing":["semantic_analysis"],"module":"contract_stability"},{"reason":"cannot_assess_body_evidence","scope":{"level":"file","file_path":"frontend/src/lib/reviewTiers.js","qualified_name":null},"missing":["semantic_analysis"],"module":"body_evidence"}]}},"coverage_ledger":[]},"observations":{"touched_directories":{"source":["frontend/"],"tests":[],"documentation":[],"examples":[],"scripts":[]},"file_classification":{"frontend/src/lib/claimVocabulary.js":"Source","frontend/src/lib/claimVocabulary.test.js":"Test","frontend/src/lib/reviewTiers.js":"Source"},"change_statistics":{"files_added":0,"files_deleted":0,"files_modified":3,"files_renamed":0},"change_categories":{"touches_tests":true,"touches_documentation":false,"touches_dependencies":false,"touches_build_files":false,"touches_ci":false,"touches_config":false},"extraction_confidence":{"unknown_file_count":0,"unsupported_extensions":[],"skipped_binary_file_count":0},"diff_stats":{"total_insertions":7,"total_deletions":2,"files":{"frontend/src/lib/claimVocabulary.js":{"insertions":1,"deletions":0},"frontend/src/lib/claimVocabulary.test.js":{"insertions":4,"deletions":0},"frontend/src/lib/reviewTiers.js":{"insertions":2,"deletions":2}}}},"pr_number":2,"base_sha":"4f2ea6934c05064b90cfa0fa135bd3fc4cdb355f","head_sha":"d6e4e3ed513d5ef3b26fb9f35d7a3a8cc76adcef"}
+{
+  "repository_url": "https://github.com/Saaransh27/intent-aware-self-healing",
+  "commit_hash": "d6e4e3ed513d5ef3b26fb9f35d7a3a8cc76adcef",
+  "outcome": "evaluated",
+  "adapter_state": "success",
+  "review": {
+    "raw": "### Verdict\nThe commit adds a new risk‑bearing claim (`history.high_recent_churn`) and updates related tests and UI text; the main thing to verify is that the backend actually provides this claim and that its inclusion does not break any downstream logic.\n\n### What changed and why\n* **`claimVocabulary.js`** – the constant `RISK_BEARING_CLAIM_IDS` now includes `\"history.high_recent_churn\"`.  \n* **`claimVocabulary.test.js`** – a new test asserts that `isRiskBearingClaim` returns `true` for the new claim.  \n* **`reviewTiers.js`** – the human‑readable description of `FILE_TIER_RULE` is expanded to mention the “high‑recent‑churn signal”.  \nThe author’s intent is to treat the backend‑computed churn signal as a risk‑bearing factor, making it affect file tiering and be reflected in the rule description.\n\n### What deserves attention, ranked\n```json\n[\n  {\n    \"title\": \"Backend claim existence / contract mismatch\",\n    \"category\": \"API/contract mismatch\",\n    \"severity\": \"Medium\",\n    \"confidence\": \"Needs verification\",\n    \"evidenceStrength\": \"None\",\n    \"status\": \"Intent mismatch\",\n    \"proofType\": \"inferred_risk\",\n    \"explanation\": \"The frontend now expects a claim identifier `history.high_recent_churn` to exist from the backend, but the Review Context provides no evidence that the backend defines or computes this claim.\",\n    \"whyItMatters\": \"If the backend does not supply this claim, the frontend will treat a non‑existent signal as risk‑bearing, potentially causing incorrect tiering or UI confusion.\",\n    \"evidence\": [\n      \"frontend/src/lib/claimVocabulary.js\",\n      \"frontend/src/lib/claimVocabulary.test.js\"\n    ],\n    \"affectedFiles\": [\n      \"frontend/src/lib/claimVocabulary.js\",\n      \"frontend/src/lib/claimVocabulary.test.js\"\n    ],\n    \"affectedSymbols\": [\n      \"RISK_BEARING_CLAIM_IDS\",\n      \"isRiskBearingClaim\"\n    ],\n    \"verificationNeeded\": [\n      \"Confirm that the backend defines and populates a claim with the exact ID `history.high_recent_churn`.\",\n      \"Check that any downstream logic that consumes `RISK_BEARING_CLAIM_IDS` correctly handles the new entry.\"\n    ],\n    \"suggestedAction\": \"Validate the backend contract for this claim and add a test covering its integration if necessary.\"\n  }\n]\n```\n\n### Open questions\n* Does the backend actually emit a claim with the identifier `history.high_recent_churn`?  \n* Are there any parts of the application (outside the files changed) that rely on the textual description of `FILE_TIER_RULE` for logic, and if so, do they need updates to handle the new wording?\n\n### Minor notes\n* The change is limited to adding a string to a `Set` and updating a description; no functional logic was altered beyond the added test.  \n* All existing tests pass according to the commit message, indicating no immediate regression in the covered areas.",
+    "parsed": true,
+    "sections": {
+      "verdict": "The commit adds a new risk‑bearing claim (`history.high_recent_churn`) and updates related tests and UI text; the main thing to verify is that the backend actually provides this claim and that its inclusion does not break any downstream logic.",
+      "what_changed_and_why": "* **`claimVocabulary.js`** – the constant `RISK_BEARING_CLAIM_IDS` now includes `\"history.high_recent_churn\"`.  \n* **`claimVocabulary.test.js`** – a new test asserts that `isRiskBearingClaim` returns `true` for the new claim.  \n* **`reviewTiers.js`** – the human‑readable description of `FILE_TIER_RULE` is expanded to mention the “high‑recent‑churn signal”.  \nThe author’s intent is to treat the backend‑computed churn signal as a risk‑bearing factor, making it affect file tiering and be reflected in the rule description.",
+      "what_deserves_attention_ranked": "```json\n[\n  {\n    \"title\": \"Backend claim existence / contract mismatch\",\n    \"category\": \"API/contract mismatch\",\n    \"severity\": \"Medium\",\n    \"confidence\": \"Needs verification\",\n    \"evidenceStrength\": \"None\",\n    \"status\": \"Intent mismatch\",\n    \"proofType\": \"inferred_risk\",\n    \"explanation\": \"The frontend now expects a claim identifier `history.high_recent_churn` to exist from the backend, but the Review Context provides no evidence that the backend defines or computes this claim.\",\n    \"whyItMatters\": \"If the backend does not supply this claim, the frontend will treat a non‑existent signal as risk‑bearing, potentially causing incorrect tiering or UI confusion.\",\n    \"evidence\": [\n      \"frontend/src/lib/claimVocabulary.js\",\n      \"frontend/src/lib/claimVocabulary.test.js\"\n    ],\n    \"affectedFiles\": [\n      \"frontend/src/lib/claimVocabulary.js\",\n      \"frontend/src/lib/claimVocabulary.test.js\"\n    ],\n    \"affectedSymbols\": [\n      \"RISK_BEARING_CLAIM_IDS\",\n      \"isRiskBearingClaim\"\n    ],\n    \"verificationNeeded\": [\n      \"Confirm that the backend defines and populates a claim with the exact ID `history.high_recent_churn`.\",\n      \"Check that any downstream logic that consumes `RISK_BEARING_CLAIM_IDS` correctly handles the new entry.\"\n    ],\n    \"suggestedAction\": \"Validate the backend contract for this claim and add a test covering its integration if necessary.\"\n  }\n]\n```",
+      "open_questions": "* Does the backend actually emit a claim with the identifier `history.high_recent_churn`?  \n* Are there any parts of the application (outside the files changed) that rely on the textual description of `FILE_TIER_RULE` for logic, and if so, do they need updates to handle the new wording?",
+      "minor_notes": "* The change is limited to adding a string to a `Set` and updating a description; no functional logic was altered beyond the added test.  \n* All existing tests pass according to the commit message, indicating no immediate regression in the covered areas."
+    }
+  },
+  "findings": [],
+  "validation": {
+    "outcome": "invalid",
+    "findings": [
+      {
+        "rule": "literal_claim_id_leak",
+        "severity": "ERROR",
+        "message": "Internal claim id 'history.high_recent_churn' appears verbatim in the response.",
+        "location": 1
+      },
+      {
+        "rule": "literal_claim_id_leak",
+        "severity": "ERROR",
+        "message": "Internal claim id 'history.high_recent_churn' appears verbatim in the response.",
+        "location": 4
+      },
+      {
+        "rule": "literal_claim_id_leak",
+        "severity": "ERROR",
+        "message": "Internal claim id 'history.high_recent_churn' appears verbatim in the response.",
+        "location": 20
+      },
+      {
+        "rule": "literal_claim_id_leak",
+        "severity": "ERROR",
+        "message": "Internal claim id 'history.high_recent_churn' appears verbatim in the response.",
+        "location": 35
+      },
+      {
+        "rule": "literal_claim_id_leak",
+        "severity": "ERROR",
+        "message": "Internal claim id 'history.high_recent_churn' appears verbatim in the response.",
+        "location": 44
+      }
+    ]
+  },
+  "structured_findings": {
+    "state": "ok",
+    "findings": [
+      {
+        "title": "Backend claim existence / contract mismatch",
+        "category": "API/contract mismatch",
+        "severity": "Medium",
+        "confidence": "Needs verification",
+        "evidenceStrength": "None",
+        "status": "Intent mismatch",
+        "proofType": "inferred_risk",
+        "explanation": "The frontend now expects a claim identifier `history.high_recent_churn` to exist from the backend, but the Review Context provides no evidence that the backend defines or computes this claim.",
+        "whyItMatters": "If the backend does not supply this claim, the frontend will treat a non‑existent signal as risk‑bearing, potentially causing incorrect tiering or UI confusion.",
+        "evidence": [
+          "frontend/src/lib/claimVocabulary.js",
+          "frontend/src/lib/claimVocabulary.test.js"
+        ],
+        "affectedFiles": [
+          "frontend/src/lib/claimVocabulary.js",
+          "frontend/src/lib/claimVocabulary.test.js"
+        ],
+        "affectedSymbols": [
+          "RISK_BEARING_CLAIM_IDS",
+          "isRiskBearingClaim"
+        ],
+        "verificationNeeded": [
+          "Confirm that the backend defines and populates a claim with the exact ID `history.high_recent_churn`.",
+          "Check that any downstream logic that consumes `RISK_BEARING_CLAIM_IDS` correctly handles the new entry."
+        ],
+        "suggestedAction": "Validate the backend contract for this claim and add a test covering its integration if necessary."
+      }
+    ],
+    "total_reported": 1,
+    "rejected_count": 0,
+    "parse_error": null
+  },
+  "review_context": {
+    "commit_summary": {
+      "message": "Treat history.high_recent_churn as risk-bearing\n\n## Summary\n- \\`history.high_recent_churn\\` (5+ changes to a file in the last 30 days) is already computed by the backend but was never included in the frontend's risk-bearing claim set, so it never affected file tiering.\n- Added it to \\`RISK_BEARING_CLAIM_IDS\\` alongside the existing \\`history.hot_file\\`/\\`history.first_author_touch\\` signals, updated \\`FILE_TIER_RULE\\`'s description to match, and added a regression test.\n\n## Test plan\n- [x] \\`claimVocabulary.test.js\\` passes (9/9), including the new test\n- [x] \\`FILE_TIER_RULE\\`'s text matches the actual behavior\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
+      "changed_files": [
+        "frontend/src/lib/claimVocabulary.js",
+        "frontend/src/lib/claimVocabulary.test.js",
+        "frontend/src/lib/reviewTiers.js"
+      ],
+      "added_files": [],
+      "deleted_files": [],
+      "modified_files": [
+        "frontend/src/lib/claimVocabulary.js",
+        "frontend/src/lib/claimVocabulary.test.js",
+        "frontend/src/lib/reviewTiers.js"
+      ],
+      "renamed_files": []
+    },
+    "commit_claims": [
+      {
+        "claim": "shape.narrow_change",
+        "scope": {
+          "level": "commit",
+          "file_path": null,
+          "qualified_name": null
+        },
+        "confidence": "inferred",
+        "basis": [
+          "change_set"
+        ],
+        "module": "change_shape"
+      },
+      {
+        "claim": "shape.heterogeneous_categories",
+        "scope": {
+          "level": "commit",
+          "file_path": null,
+          "qualified_name": null
+        },
+        "confidence": "observed",
+        "basis": [
+          "file_classification"
+        ],
+        "module": "change_shape"
+      },
+      {
+        "claim": "shape.touches_tests",
+        "scope": {
+          "level": "commit",
+          "file_path": null,
+          "qualified_name": null
+        },
+        "confidence": "observed",
+        "basis": [
+          "change_categories"
+        ],
+        "module": "change_shape"
+      },
+      {
+        "claim": "verification.test_files_changed",
+        "scope": {
+          "level": "commit",
+          "file_path": null,
+          "qualified_name": null
+        },
+        "confidence": "observed",
+        "basis": [
+          "file_classification"
+        ],
+        "module": "verification_coverage"
+      }
+    ],
+    "file_claims": {},
+    "gaps": {
+      "commit": [],
+      "files": {
+        "frontend/src/lib/claimVocabulary.js": [
+          {
+            "reason": "cannot_assess_contract",
+            "scope": {
+              "level": "file",
+              "file_path": "frontend/src/lib/claimVocabulary.js",
+              "qualified_name": null
+            },
+            "missing": [
+              "semantic_analysis"
+            ],
+            "module": "contract_stability"
+          },
+          {
+            "reason": "cannot_assess_body_evidence",
+            "scope": {
+              "level": "file",
+              "file_path": "frontend/src/lib/claimVocabulary.js",
+              "qualified_name": null
+            },
+            "missing": [
+              "semantic_analysis"
+            ],
+            "module": "body_evidence"
+          }
+        ],
+        "frontend/src/lib/claimVocabulary.test.js": [
+          {
+            "reason": "cannot_assess_contract",
+            "scope": {
+              "level": "file",
+              "file_path": "frontend/src/lib/claimVocabulary.test.js",
+              "qualified_name": null
+            },
+            "missing": [
+              "semantic_analysis"
+            ],
+            "module": "contract_stability"
+          },
+          {
+            "reason": "cannot_assess_body_evidence",
+            "scope": {
+              "level": "file",
+              "file_path": "frontend/src/lib/claimVocabulary.test.js",
+              "qualified_name": null
+            },
+            "missing": [
+              "semantic_analysis"
+            ],
+            "module": "body_evidence"
+          }
+        ],
+        "frontend/src/lib/reviewTiers.js": [
+          {
+            "reason": "cannot_assess_contract",
+            "scope": {
+              "level": "file",
+              "file_path": "frontend/src/lib/reviewTiers.js",
+              "qualified_name": null
+            },
+            "missing": [
+              "semantic_analysis"
+            ],
+            "module": "contract_stability"
+          },
+          {
+            "reason": "cannot_assess_body_evidence",
+            "scope": {
+              "level": "file",
+              "file_path": "frontend/src/lib/reviewTiers.js",
+              "qualified_name": null
+            },
+            "missing": [
+              "semantic_analysis"
+            ],
+            "module": "body_evidence"
+          }
+        ]
+      }
+    },
+    "coverage_ledger": []
+  },
+  "observations": {
+    "touched_directories": {
+      "source": [
+        "frontend/"
+      ],
+      "tests": [],
+      "documentation": [],
+      "examples": [],
+      "scripts": []
+    },
+    "file_classification": {
+      "frontend/src/lib/claimVocabulary.js": "Source",
+      "frontend/src/lib/claimVocabulary.test.js": "Test",
+      "frontend/src/lib/reviewTiers.js": "Source"
+    },
+    "change_statistics": {
+      "files_added": 0,
+      "files_deleted": 0,
+      "files_modified": 3,
+      "files_renamed": 0
+    },
+    "change_categories": {
+      "touches_tests": true,
+      "touches_documentation": false,
+      "touches_dependencies": false,
+      "touches_build_files": false,
+      "touches_ci": false,
+      "touches_config": false
+    },
+    "extraction_confidence": {
+      "unknown_file_count": 0,
+      "unsupported_extensions": [],
+      "skipped_binary_file_count": 0
+    },
+    "diff_stats": {
+      "total_insertions": 7,
+      "total_deletions": 2,
+      "files": {
+        "frontend/src/lib/claimVocabulary.js": {
+          "insertions": 1,
+          "deletions": 0
+        },
+        "frontend/src/lib/claimVocabulary.test.js": {
+          "insertions": 4,
+          "deletions": 0
+        },
+        "frontend/src/lib/reviewTiers.js": {
+          "insertions": 2,
+          "deletions": 2
+        }
+      }
+    }
+  },
+  "pr_number": 2,
+  "base_sha": "4f2ea6934c05064b90cfa0fa135bd3fc4cdb355f",
+  "head_sha": "d6e4e3ed513d5ef3b26fb9f35d7a3a8cc76adcef"
+}

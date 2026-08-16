@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -32,6 +32,55 @@ class ValidationFinding(BaseModel):
 class ValidationResult(BaseModel):
     outcome: str
     findings: List[ValidationFinding]
+
+
+# --- Structured findings (Milestone 8, Part A) ------------------------------
+#
+# Distinct from `findings: list` on ReviewResponse below, which is the
+# Review Engine's own ADR-016 category-1 catalogue (a deliberately deferred,
+# always-empty, separate mechanism — untouched here). A StructuredFinding is
+# parsed from the model's own section-3 JSON output (see
+# src/prompt/prompt_builder.py's OUTPUT FORMAT and
+# src/response_validation/structured_findings.py), never fabricated by this
+# project — every field the model didn't provide, or provided in a form that
+# doesn't match this contract, causes the whole finding to be rejected rather
+# than filled in with a guess.
+
+class StructuredFinding(BaseModel):
+    title: str
+    category: Literal[
+        "Bug", "Behavioral regression", "Test failure", "Missing test coverage",
+        "Security", "API/contract mismatch", "Dependency/compatibility",
+        "Data correctness", "Logic inconsistency", "Configuration",
+        "Maintainability", "Other",
+    ]
+    severity: Literal["Critical", "High", "Medium", "Low", "Informational"]
+    confidence: Literal["Confirmed", "Strong evidence", "Needs verification"]
+    evidenceStrength: Literal["Direct", "Strong", "Indirect", "None"]
+    status: Literal[
+        "Defect", "Regression risk", "Test gap", "Security risk",
+        "Maintainability risk", "Intent mismatch", "Informational",
+    ]
+    proofType: Literal[
+        "test_failure", "direct_code_contradiction", "direct_data_mismatch",
+        "behavioral_regression", "missing_test", "dependency_impact",
+        "security_exposure", "inferred_risk", "informational",
+    ]
+    explanation: str
+    whyItMatters: str
+    evidence: List[str]
+    affectedFiles: List[str]
+    affectedSymbols: List[str]
+    verificationNeeded: List[str]
+    suggestedAction: str
+
+
+class StructuredFindingsResult(BaseModel):
+    state: Literal["ok", "reduced", "unavailable"]
+    findings: List[StructuredFinding]
+    total_reported: int
+    rejected_count: int
+    parse_error: Optional[str] = None
 
 
 # --- Review context: the deterministic claim/gap ledger --------------------
@@ -167,6 +216,7 @@ class ReviewResponse(BaseModel):
     review: ReviewResult
     findings: list
     validation: Optional[ValidationResult] = None
+    structured_findings: Optional[StructuredFindingsResult] = None
     review_context: Optional[ReviewContext] = None
     observations: Optional[Observations] = None
 

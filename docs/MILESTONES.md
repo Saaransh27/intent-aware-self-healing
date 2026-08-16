@@ -3240,3 +3240,64 @@ this milestone's own scope constraints.
 didn't exist before this pass, plus 12 new cases in
 `reviewIntelligence.test.js`), 318 backend tests (unchanged, no backend
 code touched in this fix pass); build and lint clean.
+
+## Milestone 39 — Milestone 8: Review Intelligence Reliability and UX
+
+Re-running the live system against fresh (non-cached) model generations
+for the same two real demo PRs surfaced two real, repeatable classifier
+failures Milestone 7's keyword-based approach could not fix by adding more
+keywords: a benign fact the model phrased using the word "Confirmed"
+pushed a safe PR to `HIGH RISK` (severity and confidence were conflated
+into one keyword signal); a real defect worded with "order" instead of
+"ordering" was missed by the behavioral-change keyword list on a
+different run. Explicit instruction: replace the mechanism, not patch it
+with more keywords.
+
+Part A — `src/prompt/prompt_builder.py`'s section 3 now requires a fenced
+JSON array of structured findings (14 fields each: title/category/
+severity/confidence/evidenceStrength/status/proofType/explanation/
+whyItMatters/evidence/affectedFiles/affectedSymbols/verificationNeeded/
+suggestedAction — `src/api/models.py:StructuredFinding`), with an explicit
+six-question justification requirement for `confidence` and language
+stating a word's mere appearance in a finding's prose carries no
+classification weight. This is the first revision to Prompt v1 since its
+Milestone 15E freeze, made only because all four of the freeze's own
+stated conditions were met (real, repeatable, systematic, verified fix) —
+see `docs/modules/prompt_builder.md`'s Milestone 8 update section. A new
+module, `src/response_validation/structured_findings.py`, parses and
+strictly validates this JSON server-side (mechanical repair only —
+casing/whitespace/bare-string-to-array — anything else is a rejected
+finding, never a fabricated one), exposed as a new `structured_findings`
+field on `ReviewResponse`/`PRReviewResponse`, wired into both `POST
+/review` and `POST /review/pr`. `reviewIntelligence.js`'s deterministic
+`deriveVerdict` now requires Confirmed confidence **and** Critical/High
+severity **and** a real-risk status together for `HIGH RISK` — the exact
+fix for the false-positive failure — reading structured fields only,
+never prose. `deriveIntentVsImplementation`/`isBehavioralChange` were
+similarly rewritten to read `status`/`proofType`/`category` directly
+instead of keyword-matching. Verified against 4 real, live model calls
+(no fixed seed) across both real demo PRs — including the exact "Likely"
+schema violation the validator was built to catch, produced by the model
+on the very first live test.
+
+Part B — `PRDetail.jsx`'s information architecture reordered: PR Header →
+Review Status (renamed, visually strengthened `ReviewVerdict`) → Review
+at a Glance (new jump-link strip, `ReviewAtAGlance.jsx`) → Intent vs
+Implementation → Findings (now primary content, with severity/confidence/
+category filters operating on structured fields only) → What Changed (new
+deterministic directory-grouped walkthrough, `WhatChanged.jsx`) → Risk
+Hotspots (renamed `FileOverview`) → What We Could Not Verify (renamed
+`BlindSpots`, reworded to honest non-bug language — "Requires reviewer
+confirmation"/"Not verified", never implying a confirmed defect) → Test
+Impact (renamed `TestSignal`, explicit "tests passing ≠ safe" disclaimer)
+→ Supporting Details (unchanged). The optional sticky sidebar (spec Part
+B10) was deliberately not built — disclosed as a scope decision, not a
+silent gap. Repository selection (Part C) confirmed unchanged, its 12
+tests still passing.
+
+Real fixtures (`real_pr_review_response.{pr2_correct,pr3_incorrect,click_2202}.json`)
+were regenerated via real, live end-to-end calls using this milestone's
+actual updated response-construction code, replacing the pre-Milestone-8
+captures. 318 backend tests, 114 frontend tests across 19 files, clean
+build, clean lint. Full account, including known limitations and
+explicitly out-of-scope items: `docs/MILESTONE_8_REVIEW_INTELLIGENCE_AND_UX.md`.

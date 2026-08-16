@@ -1584,3 +1584,42 @@ correctly splits `history.high_recent_curn` (Implementation) from
 `history.high_recent_churn` (Test). 125 frontend tests (was 104), 318
 backend tests (unchanged). See `docs/MILESTONE_7_REVIEW_INTELLIGENCE.md`
 for the complete, itemized before/after.
+
+## Milestone 8 — Review Intelligence Reliability and UX
+
+Fresh (non-cached) live model runs against the same two real demo PRs
+surfaced two real, repeatable failures in Milestone 7's keyword-based
+classifier: a benign fact phrased with "Confirmed" pushed a safe PR to
+`HIGH RISK`; a real defect worded "order" instead of "ordering" was
+missed. The classification mechanism was replaced, not patched with more
+keywords. `src/prompt/prompt_builder.py`'s section 3 now requires a
+schema-defined JSON array of structured findings — the first revision to
+Prompt v1 since its Milestone 15E freeze, made only because the freeze's
+own evidence bar was met. A new server-side module,
+`src/response_validation/structured_findings.py`, strictly validates this
+JSON (reject, never fabricate), exposed as a new `structured_findings`
+response field on both review endpoints. `reviewIntelligence.js`'s
+verdict/intent-vs-implementation/behavioral-change logic now reads these
+structured fields directly — `HIGH RISK` requires Confirmed confidence
+**and** Critical/High severity **and** a real-risk status together, never
+confidence alone, fixing the exact false-positive observed. Verified
+against 4 real, live model calls (no fixed seed), including the model
+actually producing an invalid `confidence` value on the first live test —
+correctly caught and rejected by the new validator.
+
+`PRDetail.jsx`'s page order was restructured around this reliable data:
+Review Status (renamed, visually strengthened verdict), a new Review at a
+Glance jump-link strip, Findings promoted to primary content with new
+structured-field filters, a new deterministic "What Changed" directory
+walkthrough, Risk Hotspots (renamed File Overview), What We Could Not
+Verify (renamed Blind Spots, honest non-bug language), and Test Impact
+(renamed Test Signal, with an explicit "tests passing ≠ safe" disclaimer).
+An optional sticky sidebar was deliberately not built, disclosed as a
+scope decision. Repository selection confirmed unchanged. Real fixtures
+regenerated via live end-to-end calls. 318 backend tests, 114 frontend
+tests across 19 files; build and lint clean. **This system does not have
+perfect review accuracy** — the prompt/validator change makes the model's
+self-reported classification more reliable and schema-conformant, not its
+underlying judgment infallible. See
+`docs/MILESTONE_8_REVIEW_INTELLIGENCE_AND_UX.md` for the complete
+account, including known limitations and explicitly out-of-scope items.

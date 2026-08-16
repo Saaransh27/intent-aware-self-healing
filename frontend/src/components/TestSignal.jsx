@@ -1,11 +1,13 @@
-import { CATEGORY_TEST_FAILURE, CATEGORY_MISSING_TEST_COVERAGE } from "../lib/reviewIntelligence";
+import { CATEGORY_MISSING_TEST_COVERAGE } from "../lib/reviewIntelligence";
 
 // Part 8: real facts only -- touches_tests is real (observations), a test
-// mismatch is only ever asserted when a Confirmed-tier finding already
-// says so, and "no coverage found" is phrased as what the evidence
-// supports, never as a fabricated claim that no tests exist anywhere.
-// This is NOT a CI integration -- there is no real test-run result to
-// report, so nothing here claims one.
+// mismatch is only ever asserted when a real mismatch-shaped finding
+// already says so, and "no coverage found" comes directly from the
+// model's own "Missing test coverage" category / "missing_test" proof
+// type -- never a prose-scanning guess. This is NOT a CI integration --
+// there is no real test-run result to report, so nothing here claims one.
+// Milestone 8: never implies passing/absent tests mean the change is safe
+// -- this section reports what changed about tests, not a safety verdict.
 //
 // Fix (found during a precision re-review): the plain "tests changed?"
 // fact used to be shown ONLY when nothing else was -- so a PR with a real
@@ -33,23 +35,9 @@ function TestSignal({ observations, findings, intentVsImplementation }) {
     });
   }
 
-  const behavioralWithoutTestMention = findings.filter(
-    (f) =>
-      f.isBehavioralChange &&
-      f.category !== CATEGORY_TEST_FAILURE &&
-      !/\btest\b/i.test(`${f.title} ${f.body}`)
-  );
-  for (const finding of behavioralWithoutTestMention) {
-    lines.push({
-      tone: "warning",
-      title: "No relevant test coverage identified",
-      body: `${finding.title || finding.body} — no test coverage was found for this behavior.`,
-    });
-  }
-
   const missingCoverageFindings = findings.filter((f) => f.category === CATEGORY_MISSING_TEST_COVERAGE);
   for (const finding of missingCoverageFindings) {
-    lines.push({ tone: "warning", title: "Missing test coverage", body: finding.body });
+    lines.push({ tone: "warning", title: "Missing test coverage", body: finding.explanation });
   }
 
   if (lines.length === 1 && !touchesTests) {
@@ -61,8 +49,12 @@ function TestSignal({ observations, findings, intentVsImplementation }) {
   }
 
   return (
-    <section className="test-signal">
-      <h2 className="section-heading">Validation &amp; Test Coverage</h2>
+    <section id="test-impact" className="test-signal">
+      <h2 className="section-heading">Test Impact</h2>
+      <p className="section-hint">
+        What changed about tests, not a safety verdict — passing or unaffected tests never mean the change itself
+        is safe; see Review Status and Findings above for the actual risk assessment.
+      </p>
       <ul className="test-signal-list">
         {lines.map((line, index) => (
           <li key={index} className={`test-signal-item test-signal-item-${line.tone}`}>

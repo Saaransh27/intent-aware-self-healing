@@ -169,6 +169,62 @@ traceable to specific wording (e.g. a model consistently fabricating a numeric s
 despite the "no numeric confidence figures" instruction) — and even then, per this
 project's own standing discipline, fix against that evidence, not against intuition.
 
+## Milestone 8 update (2026-08-16): section 3 revised under the stated evidence bar
+
+The freeze above was revisited — the first revision since Milestone 15E — because
+all four of its own stated conditions were met: observed in real production usage
+(two live PRs reviewed against the deployed system), repeatable (reproduced across
+multiple live model calls, not a one-off), a systematic failure rather than expected
+model variance, and a fix verified not to regress the cases it was meant to fix. The
+two real failures: (1) a benign fact the model happened to phrase using the word
+"Confirmed" pushed an unrelated, low-risk commit to a HIGH RISK verdict, because the
+downstream classifier treated any occurrence of that word as dispositive regardless
+of the finding's actual severity; (2) a real behavioral regression worded with
+"order" instead of "ordering" was missed entirely, because the downstream
+classification was keyword matching over free prose and cannot generalize past the
+literal words it was written for.
+
+**What changed:** only `OUTPUT FORMAT` point 3 ("What deserves attention, ranked").
+It now requires a single fenced ` ```json ` array instead of free markdown, with
+exactly 14 named fields per finding (title/category/severity/confidence/
+evidenceStrength/status/proofType/explanation/whyItMatters/evidence/affectedFiles/
+affectedSymbols/verificationNeeded/suggestedAction — see
+`src/api/models.py:StructuredFinding` for the authoritative field list and enum
+values) and a `CONFIDENCE` subsection requiring the model to work through six
+justification questions before setting that field, with explicit language that a
+word's mere appearance in the finding's prose ("confirmed", "fail", "mismatch", a
+citation label) carries no meaning for the field on its own. A second, smaller fix
+followed the first live test: the finding-level `confidence` field's three-term
+vocabulary (Confirmed/Strong evidence/Needs verification) is deliberately distinct
+from `UNCERTAINTY VOCABULARY`'s four-term prose vocabulary (Confirmed/Likely/Worth
+checking/Unknown) used everywhere else in the response — the model initially bled
+"Likely" from the latter into the former; both `UNCERTAINTY VOCABULARY` and the
+per-finding field description were amended to state explicitly that the two
+vocabularies are separate and non-interchangeable.
+
+**What did not change:** `ROLE`, `REASONING SEQUENCE`, `EVIDENCE PRECEDENCE`,
+`DECLINE BOUNDARY`, `FORBIDDEN BEHAVIORS`, `OBJECTIVE`, and `OUTPUT FORMAT` points
+1/2/4/5 are byte-identical to Prompt v1. `WHAT MUST NEVER APPEAR` and
+`HOW TO WRITE EACH PROSE FIELD` (renamed from `HOW TO WRITE EACH POINT`) gained
+clarifying language reconciling them with the new structured fields, but the actual
+rules they state are unchanged. This is a targeted amendment to one section's
+content contract, not a prompt replacement.
+
+**Verification:** 4 real, live calls against two real PRs on a real repository
+(`src/pipeline/shakti_execute.call_shakti`, no fixed seed) — one correct change, one
+with two real, independently-verified defects — after the fix, all 4 produced
+schema-valid JSON with correctly calibrated confidence values, including the
+specific "Likely" leak the first live call actually produced. See
+`docs/MILESTONE_8_REVIEW_INTELLIGENCE_AND_UX.md` for the full account, and
+`src/response_validation/structured_findings.py` for the parser/validator that
+treats this section's output as untrusted input regardless — the prompt change
+narrows how often the model drifts from the contract, but the backend never assumes
+it always will comply.
+
+**Freeze reinstated for section 3, under the same standing discipline:** do not
+continue refining this section's wording without new evidence meeting the same bar
+this revision met.
+
 ## Dependencies
 
 Python stdlib only (`json`).

@@ -19,6 +19,7 @@ from src.api.models import (
     ReviewResponse,
     ReviewResult,
     ReviewSections,
+    StructuredFindingsResult,
     ValidationFinding,
     ValidationResult,
 )
@@ -43,6 +44,7 @@ from src.github.pr_resolver import resolve_pull_request
 from src.pipeline.shakti_execute import call_shakti
 from src.pipeline.orchestrator import CommitResolutionError, run_pipeline_for_commit, run_pipeline_for_pr
 from src.response_validation.response_validator import sanitize_response, validate_response
+from src.response_validation.structured_findings import parse_structured_findings
 
 REQUEST_TIMEOUT_SECONDS = 90
 
@@ -65,6 +67,17 @@ def _validation_result_or_none(validation):
         outcome=validation["outcome"],
         findings=[ValidationFinding(**finding) for finding in validation["findings"]],
     )
+
+
+def _structured_findings_result_or_none(sections):
+    # No structured-findings state to report at all when the five ADR-013
+    # sections themselves didn't parse -- there is no section-3 text to
+    # extract a JSON array from in the first place, a different failure
+    # mode than "we found JSON and it didn't validate" (state="unavailable").
+    if sections is None:
+        return None
+    parsed = parse_structured_findings(sections["what_deserves_attention_ranked"])
+    return StructuredFindingsResult(**parsed)
 
 
 def _review_context_model(review_context):
@@ -169,6 +182,7 @@ def review(request: ReviewRequest, runner=Depends(get_pipeline_runner)):
         ),
         findings=review_result["findings"],
         validation=_validation_result_or_none(validation),
+        structured_findings=_structured_findings_result_or_none(sections),
         review_context=_review_context_model(result["review_context"]),
         observations=Observations(**result["observations"]),
     )
@@ -247,6 +261,7 @@ def review_pr(request: PRReviewRequest, runner=Depends(get_pr_pipeline_runner)):
         ),
         findings=review_result["findings"],
         validation=_validation_result_or_none(validation),
+        structured_findings=_structured_findings_result_or_none(sections),
         review_context=_review_context_model(result["review_context"]),
         observations=Observations(**result["observations"]),
     )

@@ -26,7 +26,7 @@ function topAttributedFinding(filePath, findings, severityByPath) {
   if (!severityByPath.has(filePath)) return null;
   const targetSeverity = severityByPath.get(filePath);
   return findings.find(
-    (f) => f.severity === targetSeverity && (f.mentionedFiles.includes(filePath) || f.evidence.length > 0)
+    (f) => f.severity === targetSeverity && (f.affectedFiles.includes(filePath) || f.evidence.length > 0)
   ) || null;
 }
 
@@ -44,14 +44,14 @@ function topAttributedFinding(filePath, findings, severityByPath) {
 // the most specific correct URL constructible client-side without
 // GitHub's own (undocumented) diff-anchor hashing. Omitted entirely for
 // the old commit-review flow, which has no PR concept to link to.
-function FileOverview({ reviewContext, observations, findings, changeText, selectedFile, onSelectFile, owner, repo, headSha }) {
+function FileOverview({ reviewContext, observations, findings, selectedFile, onSelectFile, owner, repo, headSha }) {
   if (!reviewContext) return null;
 
   const riskBearingPaths = riskBearingFilePaths(reviewContext);
   const { routineGroups } = reviewStrategyGroups(reviewContext);
   const routinePaths = new Set(routineGroups.flatMap((g) => g.collapsed_group_files));
   const changedFilePaths = reviewContext?.commit_summary?.changed_files || [];
-  const severityByPath = attributeFindingsToFiles(findings || [], changeText, changedFilePaths);
+  const severityByPath = attributeFindingsToFiles(findings || [], changedFilePaths);
 
   const files = filesWithContext(reviewContext, observations)
     .map((file) => ({
@@ -63,10 +63,11 @@ function FileOverview({ reviewContext, observations, findings, changeText, selec
   if (files.length === 0) return null;
 
   return (
-    <section className="file-overview">
-      <h2 className="section-heading">File Overview</h2>
+    <section id="risk-hotspots" className="file-overview">
+      <h2 className="section-heading">Risk Hotspots</h2>
       <p className="section-hint">
-        Risk reconciles real deterministic risk-bearing signals with real findings actually attributed to each file — never a fabricated score.
+        The files that deserve the most attention, sorted by real risk — reconciling deterministic risk-bearing
+        signals with the findings actually attributed to each file, never a fabricated score.
       </p>
       <div className="file-table">
         <div className="file-table-header" role="row">
@@ -81,7 +82,7 @@ function FileOverview({ reviewContext, observations, findings, changeText, selec
           const riskClaims = file.claims.filter(isRiskBearingClaim);
           const attributedFinding = topAttributedFinding(file.path, findings || [], severityByPath);
           const whyText = attributedFinding
-            ? attributedFinding.title || attributedFinding.body
+            ? attributedFinding.title || attributedFinding.explanation
             : whyItMatters(file.path, reviewContext);
           const githubUrl = owner && repo && headSha
             ? `https://github.com/${owner}/${repo}/blob/${headSha}/${file.path}`

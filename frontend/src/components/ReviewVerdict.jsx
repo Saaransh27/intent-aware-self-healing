@@ -19,7 +19,7 @@ const CONFIDENCE_RANK = { [CONFIRMED]: 2, [STRONG_EVIDENCE]: 1 };
 // why, how confident is the system, what should I inspect first. Never
 // "SAFE TO MERGE" -- this product stays conservative by design (Part 3).
 function ReviewVerdict({ verdict, findings }) {
-  const { level, confirmedCount, strongEvidenceCount, needsVerificationCount, informationalCount } = verdict;
+  const { level, confirmedCount, strongEvidenceCount, needsVerificationCount, informationalCount, confidenceReduced } = verdict;
   const { Icon, className } = VERDICT_META[level];
 
   const actionable = findings.filter((f) => !f.isInformational);
@@ -29,15 +29,24 @@ function ReviewVerdict({ verdict, findings }) {
 
   const topConfirmed = actionable.find((f) => f.confidence === CONFIRMED);
   const nextAction = topConfirmed
-    ? `Inspect ${topConfirmed.mentionedFiles.length > 0 ? topConfirmed.mentionedFiles.join(" and ") : "the change described above"} before merging.`
+    ? `Inspect ${topConfirmed.affectedFiles.length > 0 ? topConfirmed.affectedFiles.join(" and ") : "the change described above"} before merging.`
     : "No blocking issue found.";
 
   return (
-    <section className={`review-verdict ${className}`}>
+    <section id="review-status" className={`review-verdict ${className}`}>
+      <span className="review-verdict-eyebrow">Review Status</span>
       <div className="review-verdict-top">
         <Icon className="review-verdict-icon" size={22} strokeWidth={1.75} aria-hidden="true" />
         <span className="review-verdict-level">{level}</span>
       </div>
+
+      {confidenceReduced && (
+        <p className="review-verdict-confidence-reduced" role="status">
+          Analysis confidence reduced — the model's structured findings for this review didn't fully validate, so
+          this verdict may be based on an incomplete or empty set of findings. Read the full response below before
+          relying on it.
+        </p>
+      )}
 
       <div className="review-verdict-counts">
         <span className="verdict-count verdict-count-confirmed">{confirmedCount} Confirmed</span>
@@ -54,7 +63,7 @@ function ReviewVerdict({ verdict, findings }) {
               <span className={`badge badge-confidence-${finding.confidence.replace(/\s+/g, "-").toLowerCase()}`}>
                 {finding.confidence}
               </span>
-              <span className="review-verdict-headline-text">{finding.title || finding.body}</span>
+              <span className="review-verdict-headline-text">{finding.title || finding.explanation}</span>
             </li>
           ))}
         </ul>

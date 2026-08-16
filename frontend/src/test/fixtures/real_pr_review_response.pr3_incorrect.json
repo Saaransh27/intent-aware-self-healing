@@ -1,1 +1,346 @@
-{"repository_url":"https://github.com/Saaransh27/intent-aware-self-healing","commit_hash":"785d6ec410b74ac8164b475b77b7bbbebbe0a7c2","outcome":"evaluated","adapter_state":"success","review":{"raw":"### Verdict\nThis commit warrants close review – the added risk‑bearing claim identifier is misspelled and the `highestTier` function’s ordering was altered, both of which can change runtime behaviour.\n\n### What changed and why\n- **`claimVocabulary.js`** – the `RISK_BEARING_CLAIM_IDS` set was extended, but the new entry is `\"history.high_recent_curn\"` (missing the final “h”).  \n- **`claimVocabulary.test.js`** – a new test asserts that the correctly spelled claim `\"history.high_recent_churn\"` is treated as risk‑bearing.  \n- **`reviewTiers.js`** – the human‑readable rule text now mentions the “high‑recent‑churn” signal. The `highestTier` helper was modified: the early return for `REQUIRES_IMMEDIATE_REVIEW` was moved after the check for `STANDARD_REVIEW`, changing the priority logic.  \nThe author’s intent, per the commit message, is to make the churn signal risk‑bearing and reflected in tiering rules; the diff partially accomplishes this but introduces two inconsistencies.\n\n### What deserves attention, ranked\n1. **Misspelled claim identifier** – the set contains `\"history.high_recent_curn\"` while the test (and the intended semantics) refer to `\"history.high_recent_churn\"` (**Confirmed**). This mismatch will cause the new test to fail and the churn signal not to be recognized at runtime.  \n2. **Changed tier‑selection ordering** – `highestTier` now checks for `STANDARD_REVIEW` before `REQUIRES_IMMEDIATE_REVIEW`. If a file’s tier list includes both constants, the function will return `STANDARD_REVIEW` instead of the more urgent `REQUIRES_IMMEDIATE_REVIEW` (**Confirmed**). This could downgrade files that should trigger immediate review.  \n3. **Rule description update** – the `FILE_TIER_RULE` string now mentions the churn signal (**Confirmed**). No functional impact, but ensure the wording stays in sync with the actual logic.  \n4. **Added test for the churn claim** – the test expects the correctly spelled claim to be risk‑bearing (**Confirmed**). It will expose the typo above.\n\n### Open questions\n- **Is the reordering of `highestTier` intentional?** If the priority change was deliberate, accompanying documentation or tests should reflect the new semantics.  \n- **Should the misspelled identifier be corrected to `\"history.high_recent_churn\"`?** Confirmation is needed on the exact claim name used elsewhere in the codebase.  \n- **Are there other modules that reference `RISK_BEARING_CLAIM_IDS` and might be affected by the typo?** A search for the misspelled string would verify whether the error propagates.\n\n### Minor notes\n- No other files were added or removed.  \n- The commit touches test files, satisfying the `shape.touches_tests` claim.  \n- The coverage ledger is empty, but the new test is present and should be run to catch the identifier mismatch.","parsed":true,"sections":{"verdict":"This commit warrants close review – the added risk‑bearing claim identifier is misspelled and the `highestTier` function’s ordering was altered, both of which can change runtime behaviour.","what_changed_and_why":"- **`claimVocabulary.js`** – the `RISK_BEARING_CLAIM_IDS` set was extended, but the new entry is `\"history.high_recent_curn\"` (missing the final “h”).  \n- **`claimVocabulary.test.js`** – a new test asserts that the correctly spelled claim `\"history.high_recent_churn\"` is treated as risk‑bearing.  \n- **`reviewTiers.js`** – the human‑readable rule text now mentions the “high‑recent‑churn” signal. The `highestTier` helper was modified: the early return for `REQUIRES_IMMEDIATE_REVIEW` was moved after the check for `STANDARD_REVIEW`, changing the priority logic.  \nThe author’s intent, per the commit message, is to make the churn signal risk‑bearing and reflected in tiering rules; the diff partially accomplishes this but introduces two inconsistencies.","what_deserves_attention_ranked":"1. **Misspelled claim identifier** – the set contains `\"history.high_recent_curn\"` while the test (and the intended semantics) refer to `\"history.high_recent_churn\"` (**Confirmed**). This mismatch will cause the new test to fail and the churn signal not to be recognized at runtime.  \n2. **Changed tier‑selection ordering** – `highestTier` now checks for `STANDARD_REVIEW` before `REQUIRES_IMMEDIATE_REVIEW`. If a file’s tier list includes both constants, the function will return `STANDARD_REVIEW` instead of the more urgent `REQUIRES_IMMEDIATE_REVIEW` (**Confirmed**). This could downgrade files that should trigger immediate review.  \n3. **Rule description update** – the `FILE_TIER_RULE` string now mentions the churn signal (**Confirmed**). No functional impact, but ensure the wording stays in sync with the actual logic.  \n4. **Added test for the churn claim** – the test expects the correctly spelled claim to be risk‑bearing (**Confirmed**). It will expose the typo above.","open_questions":"- **Is the reordering of `highestTier` intentional?** If the priority change was deliberate, accompanying documentation or tests should reflect the new semantics.  \n- **Should the misspelled identifier be corrected to `\"history.high_recent_churn\"`?** Confirmation is needed on the exact claim name used elsewhere in the codebase.  \n- **Are there other modules that reference `RISK_BEARING_CLAIM_IDS` and might be affected by the typo?** A search for the misspelled string would verify whether the error propagates.","minor_notes":"- No other files were added or removed.  \n- The commit touches test files, satisfying the `shape.touches_tests` claim.  \n- The coverage ledger is empty, but the new test is present and should be run to catch the identifier mismatch."}},"findings":[],"validation":{"outcome":"invalid","findings":[{"rule":"literal_claim_id_leak","severity":"ERROR","message":"Internal claim id 'history.high_recent_churn' appears verbatim in the response.","location":5},{"rule":"literal_claim_id_leak","severity":"ERROR","message":"Internal claim id 'history.high_recent_churn' appears verbatim in the response.","location":10},{"rule":"literal_claim_id_leak","severity":"ERROR","message":"Internal claim id 'history.high_recent_churn' appears verbatim in the response.","location":17},{"rule":"literal_claim_id_leak","severity":"ERROR","message":"Internal claim id 'shape.touches_tests' appears verbatim in the response.","location":22},{"rule":"module_jargon_leak","severity":"WARNING","message":"Internal terminology-like phrase found: 'coverage ledger'.","location":23}]},"review_context":{"commit_summary":{"message":"Treat history.high_recent_churn as risk-bearing\n\n## Summary\n- \\`history.high_recent_churn\\` (5+ changes to a file in the last 30 days) is already computed by the backend but was never included in the frontend's risk-bearing claim set, so it never affected file tiering.\n- Added it to \\`RISK_BEARING_CLAIM_IDS\\` alongside the existing \\`history.hot_file\\`/\\`history.first_author_touch\\` signals, updated \\`FILE_TIER_RULE\\`'s description to match, and added a regression test.\n\n## Test plan\n- [x] \\`claimVocabulary.test.js\\` passes\n- [x] \\`FILE_TIER_RULE\\`'s text matches the actual behavior\n\n---\n*Demo note (remove before merging): this PR is deliberately paired with #2 for testing the PR-review tool's analysis. It looks like the same change but intentionally contains real, verifiable defects -- one caught by the existing automated test suite, one a logic bug no current test covers.*\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)","changed_files":["frontend/src/lib/claimVocabulary.js","frontend/src/lib/claimVocabulary.test.js","frontend/src/lib/reviewTiers.js"],"added_files":[],"deleted_files":[],"modified_files":["frontend/src/lib/claimVocabulary.js","frontend/src/lib/claimVocabulary.test.js","frontend/src/lib/reviewTiers.js"],"renamed_files":[]},"commit_claims":[{"claim":"shape.narrow_change","scope":{"level":"commit","file_path":null,"qualified_name":null},"confidence":"inferred","basis":["change_set"],"module":"change_shape"},{"claim":"shape.heterogeneous_categories","scope":{"level":"commit","file_path":null,"qualified_name":null},"confidence":"observed","basis":["file_classification"],"module":"change_shape"},{"claim":"shape.touches_tests","scope":{"level":"commit","file_path":null,"qualified_name":null},"confidence":"observed","basis":["change_categories"],"module":"change_shape"},{"claim":"verification.test_files_changed","scope":{"level":"commit","file_path":null,"qualified_name":null},"confidence":"observed","basis":["file_classification"],"module":"verification_coverage"}],"file_claims":{},"gaps":{"commit":[],"files":{"frontend/src/lib/claimVocabulary.js":[{"reason":"cannot_assess_contract","scope":{"level":"file","file_path":"frontend/src/lib/claimVocabulary.js","qualified_name":null},"missing":["semantic_analysis"],"module":"contract_stability"},{"reason":"cannot_assess_body_evidence","scope":{"level":"file","file_path":"frontend/src/lib/claimVocabulary.js","qualified_name":null},"missing":["semantic_analysis"],"module":"body_evidence"}],"frontend/src/lib/claimVocabulary.test.js":[{"reason":"cannot_assess_contract","scope":{"level":"file","file_path":"frontend/src/lib/claimVocabulary.test.js","qualified_name":null},"missing":["semantic_analysis"],"module":"contract_stability"},{"reason":"cannot_assess_body_evidence","scope":{"level":"file","file_path":"frontend/src/lib/claimVocabulary.test.js","qualified_name":null},"missing":["semantic_analysis"],"module":"body_evidence"}],"frontend/src/lib/reviewTiers.js":[{"reason":"cannot_assess_contract","scope":{"level":"file","file_path":"frontend/src/lib/reviewTiers.js","qualified_name":null},"missing":["semantic_analysis"],"module":"contract_stability"},{"reason":"cannot_assess_body_evidence","scope":{"level":"file","file_path":"frontend/src/lib/reviewTiers.js","qualified_name":null},"missing":["semantic_analysis"],"module":"body_evidence"}]}},"coverage_ledger":[]},"observations":{"touched_directories":{"source":["frontend/"],"tests":[],"documentation":[],"examples":[],"scripts":[]},"file_classification":{"frontend/src/lib/claimVocabulary.js":"Source","frontend/src/lib/claimVocabulary.test.js":"Test","frontend/src/lib/reviewTiers.js":"Source"},"change_statistics":{"files_added":0,"files_deleted":0,"files_modified":3,"files_renamed":0},"change_categories":{"touches_tests":true,"touches_documentation":false,"touches_dependencies":false,"touches_build_files":false,"touches_ci":false,"touches_config":false},"extraction_confidence":{"unknown_file_count":0,"unsupported_extensions":[],"skipped_binary_file_count":0},"diff_stats":{"total_insertions":8,"total_deletions":3,"files":{"frontend/src/lib/claimVocabulary.js":{"insertions":1,"deletions":0},"frontend/src/lib/claimVocabulary.test.js":{"insertions":4,"deletions":0},"frontend/src/lib/reviewTiers.js":{"insertions":3,"deletions":3}}}},"pr_number":3,"base_sha":"4f2ea6934c05064b90cfa0fa135bd3fc4cdb355f","head_sha":"785d6ec410b74ac8164b475b77b7bbbebbe0a7c2"}
+{
+  "repository_url": "https://github.com/Saaransh27/intent-aware-self-healing",
+  "commit_hash": "785d6ec410b74ac8164b475b77b7bbbebbe0a7c2",
+  "outcome": "evaluated",
+  "adapter_state": "success",
+  "review": {
+    "raw": "### Verdict\nThis commit needs immediate reviewer attention because it introduces a misspelled risk‑bearing claim identifier and unintentionally changes tier‑selection logic, both of which will break the new test and downgrade urgent review signals.\n\n### What changed and why\nThe author intended to add the `history.high_recent_churn` claim to the `RISK_BEARING_CLAIM_IDS` set, update the `FILE_TIER_RULE` description to mention the new “high‑recent‑churn” signal, and add a corresponding test. The diff, however, inserts a misspelled identifier (`history.high_recent_curn`) into the set, while the test checks the correctly spelled claim. Additionally, the `highestTier` function’s precedence check for `REQUIRES_IMMEDIATE_REVIEW` was moved after the `STANDARD_REVIEW` check, causing immediate‑review signals to be masked by a standard‑review classification.\n\n### What deserves attention, ranked\n```json\n[\n  {\n    \"title\": \"Misspelled claim identifier in risk‑bearing set\",\n    \"category\": \"Bug\",\n    \"severity\": \"High\",\n    \"confidence\": \"Confirmed\",\n    \"evidenceStrength\": \"Direct\",\n    \"status\": \"Defect\",\n    \"proofType\": \"direct_code_contradiction\",\n    \"explanation\": \"The added string in `RISK_BEARING_CLAIM_IDS` is `history.high_recent_curn` (missing the trailing \\\"h\\\"), so the intended `history.high_recent_churn` claim is not actually included.\",\n    \"whyItMatters\": \"The risk‑bearing logic will never treat the high‑recent‑churn signal as high risk, defeating the purpose of the change.\",\n    \"evidence\": [\"frontend/src/lib/claimVocabulary.js diff line adding \\\"history.high_recent_curn\\\"\"],\n    \"affectedFiles\": [\"frontend/src/lib/claimVocabulary.js\"],\n    \"affectedSymbols\": [\"RISK_BEARING_CLAIM_IDS\"],\n    \"verificationNeeded\": [],\n    \"suggestedAction\": \"Correct the identifier to \\\"history.high_recent_churn\\\" in the set.\"\n  },\n  {\n    \"title\": \"New test will fail due to mismatched claim name\",\n    \"category\": \"Test failure\",\n    \"severity\": \"High\",\n    \"confidence\": \"Confirmed\",\n    \"evidenceStrength\": \"Direct\",\n    \"status\": \"Defect\",\n    \"proofType\": \"test_failure\",\n    \"explanation\": \"The added test asserts that `isRiskBearingClaim` returns true for `history.high_recent_churn`, but the implementation set contains the misspelled `history.high_recent_curn`, causing the assertion to fail.\",\n    \"whyItMatters\": \"The CI pipeline will reject the PR, masking other potential issues and preventing the intended behavior from being verified.\",\n    \"evidence\": [\"frontend/src/lib/claimVocabulary.test.js diff lines adding test for \\\"history.high_recent_churn\\\"\"],\n    \"affectedFiles\": [\"frontend/src/lib/claimVocabulary.test.js\"],\n    \"affectedSymbols\": [\"isRiskBearingClaim test case\"],\n    \"verificationNeeded\": [],\n    \"suggestedAction\": \"Align the claim name in both the set and the test (use the correct spelling).\"\n  },\n  {\n    \"title\": \"Behavioral regression in highestTier precedence\",\n    \"category\": \"Bug\",\n    \"severity\": \"Critical\",\n    \"confidence\": \"Confirmed\",\n    \"evidenceStrength\": \"Direct\",\n    \"status\": \"Regression risk\",\n    \"proofType\": \"behavioral_regression\",\n    \"explanation\": \"The early return for `REQUIRES_IMMEDIATE_REVIEW` was moved after the `STANDARD_REVIEW` check, so a file that qualifies for immediate review will now be classified as standard review instead.\",\n    \"whyItMatters\": \"Urgent review signals may be downgraded, potentially allowing high‑risk changes to slip through without proper scrutiny.\",\n    \"evidence\": [\"frontend/src/lib/reviewTiers.js diff showing reordered `if` statements\"],\n    \"affectedFiles\": [\"frontend/src/lib/reviewTiers.js\"],\n    \"affectedSymbols\": [\"highestTier\"],\n    \"verificationNeeded\": [],\n    \"suggestedAction\": \"Restore the original precedence: check for `REQUIRES_IMMEDIATE_REVIEW` before `STANDARD_REVIEW`.\"\n  }\n]\n```\n\n### Open questions\n- **Presence of the high‑recent‑churn signal elsewhere**: The change assumes that the backend already emits a `history.high_recent_churn` claim. Verify that this claim is indeed produced and that no other modules reference the misspelled identifier.\n- **Impact on existing documentation**: The `FILE_TIER_RULE` description now mentions “high‑recent‑churn signal.” Confirm that any user‑facing docs or UI that reference this rule are updated accordingly.\n\n### Minor notes\n- The description string in `reviewTiers.js` was updated correctly to mention the new signal; no further action needed there once the identifier typo is fixed.",
+    "parsed": true,
+    "sections": {
+      "verdict": "This commit needs immediate reviewer attention because it introduces a misspelled risk‑bearing claim identifier and unintentionally changes tier‑selection logic, both of which will break the new test and downgrade urgent review signals.",
+      "what_changed_and_why": "The author intended to add the `history.high_recent_churn` claim to the `RISK_BEARING_CLAIM_IDS` set, update the `FILE_TIER_RULE` description to mention the new “high‑recent‑churn” signal, and add a corresponding test. The diff, however, inserts a misspelled identifier (`history.high_recent_curn`) into the set, while the test checks the correctly spelled claim. Additionally, the `highestTier` function’s precedence check for `REQUIRES_IMMEDIATE_REVIEW` was moved after the `STANDARD_REVIEW` check, causing immediate‑review signals to be masked by a standard‑review classification.",
+      "what_deserves_attention_ranked": "```json\n[\n  {\n    \"title\": \"Misspelled claim identifier in risk‑bearing set\",\n    \"category\": \"Bug\",\n    \"severity\": \"High\",\n    \"confidence\": \"Confirmed\",\n    \"evidenceStrength\": \"Direct\",\n    \"status\": \"Defect\",\n    \"proofType\": \"direct_code_contradiction\",\n    \"explanation\": \"The added string in `RISK_BEARING_CLAIM_IDS` is `history.high_recent_curn` (missing the trailing \\\"h\\\"), so the intended `history.high_recent_churn` claim is not actually included.\",\n    \"whyItMatters\": \"The risk‑bearing logic will never treat the high‑recent‑churn signal as high risk, defeating the purpose of the change.\",\n    \"evidence\": [\"frontend/src/lib/claimVocabulary.js diff line adding \\\"history.high_recent_curn\\\"\"],\n    \"affectedFiles\": [\"frontend/src/lib/claimVocabulary.js\"],\n    \"affectedSymbols\": [\"RISK_BEARING_CLAIM_IDS\"],\n    \"verificationNeeded\": [],\n    \"suggestedAction\": \"Correct the identifier to \\\"history.high_recent_churn\\\" in the set.\"\n  },\n  {\n    \"title\": \"New test will fail due to mismatched claim name\",\n    \"category\": \"Test failure\",\n    \"severity\": \"High\",\n    \"confidence\": \"Confirmed\",\n    \"evidenceStrength\": \"Direct\",\n    \"status\": \"Defect\",\n    \"proofType\": \"test_failure\",\n    \"explanation\": \"The added test asserts that `isRiskBearingClaim` returns true for `history.high_recent_churn`, but the implementation set contains the misspelled `history.high_recent_curn`, causing the assertion to fail.\",\n    \"whyItMatters\": \"The CI pipeline will reject the PR, masking other potential issues and preventing the intended behavior from being verified.\",\n    \"evidence\": [\"frontend/src/lib/claimVocabulary.test.js diff lines adding test for \\\"history.high_recent_churn\\\"\"],\n    \"affectedFiles\": [\"frontend/src/lib/claimVocabulary.test.js\"],\n    \"affectedSymbols\": [\"isRiskBearingClaim test case\"],\n    \"verificationNeeded\": [],\n    \"suggestedAction\": \"Align the claim name in both the set and the test (use the correct spelling).\"\n  },\n  {\n    \"title\": \"Behavioral regression in highestTier precedence\",\n    \"category\": \"Bug\",\n    \"severity\": \"Critical\",\n    \"confidence\": \"Confirmed\",\n    \"evidenceStrength\": \"Direct\",\n    \"status\": \"Regression risk\",\n    \"proofType\": \"behavioral_regression\",\n    \"explanation\": \"The early return for `REQUIRES_IMMEDIATE_REVIEW` was moved after the `STANDARD_REVIEW` check, so a file that qualifies for immediate review will now be classified as standard review instead.\",\n    \"whyItMatters\": \"Urgent review signals may be downgraded, potentially allowing high‑risk changes to slip through without proper scrutiny.\",\n    \"evidence\": [\"frontend/src/lib/reviewTiers.js diff showing reordered `if` statements\"],\n    \"affectedFiles\": [\"frontend/src/lib/reviewTiers.js\"],\n    \"affectedSymbols\": [\"highestTier\"],\n    \"verificationNeeded\": [],\n    \"suggestedAction\": \"Restore the original precedence: check for `REQUIRES_IMMEDIATE_REVIEW` before `STANDARD_REVIEW`.\"\n  }\n]\n```",
+      "open_questions": "- **Presence of the high‑recent‑churn signal elsewhere**: The change assumes that the backend already emits a `history.high_recent_churn` claim. Verify that this claim is indeed produced and that no other modules reference the misspelled identifier.\n- **Impact on existing documentation**: The `FILE_TIER_RULE` description now mentions “high‑recent‑churn signal.” Confirm that any user‑facing docs or UI that reference this rule are updated accordingly.",
+      "minor_notes": "- The description string in `reviewTiers.js` was updated correctly to mention the new signal; no further action needed there once the identifier typo is fixed."
+    }
+  },
+  "findings": [],
+  "validation": {
+    "outcome": "invalid",
+    "findings": [
+      {
+        "rule": "literal_claim_id_leak",
+        "severity": "ERROR",
+        "message": "Internal claim id 'history.high_recent_churn' appears verbatim in the response.",
+        "location": 4
+      },
+      {
+        "rule": "literal_claim_id_leak",
+        "severity": "ERROR",
+        "message": "Internal claim id 'history.high_recent_churn' appears verbatim in the response.",
+        "location": 17
+      },
+      {
+        "rule": "literal_claim_id_leak",
+        "severity": "ERROR",
+        "message": "Internal claim id 'history.high_recent_churn' appears verbatim in the response.",
+        "location": 23
+      },
+      {
+        "rule": "literal_claim_id_leak",
+        "severity": "ERROR",
+        "message": "Internal claim id 'history.high_recent_churn' appears verbatim in the response.",
+        "location": 33
+      },
+      {
+        "rule": "literal_claim_id_leak",
+        "severity": "ERROR",
+        "message": "Internal claim id 'history.high_recent_churn' appears verbatim in the response.",
+        "location": 35
+      },
+      {
+        "rule": "literal_claim_id_leak",
+        "severity": "ERROR",
+        "message": "Internal claim id 'history.high_recent_churn' appears verbatim in the response.",
+        "location": 61
+      }
+    ]
+  },
+  "structured_findings": {
+    "state": "ok",
+    "findings": [
+      {
+        "title": "Misspelled claim identifier in risk‑bearing set",
+        "category": "Bug",
+        "severity": "High",
+        "confidence": "Confirmed",
+        "evidenceStrength": "Direct",
+        "status": "Defect",
+        "proofType": "direct_code_contradiction",
+        "explanation": "The added string in `RISK_BEARING_CLAIM_IDS` is `history.high_recent_curn` (missing the trailing \"h\"), so the intended `history.high_recent_churn` claim is not actually included.",
+        "whyItMatters": "The risk‑bearing logic will never treat the high‑recent‑churn signal as high risk, defeating the purpose of the change.",
+        "evidence": [
+          "frontend/src/lib/claimVocabulary.js diff line adding \"history.high_recent_curn\""
+        ],
+        "affectedFiles": [
+          "frontend/src/lib/claimVocabulary.js"
+        ],
+        "affectedSymbols": [
+          "RISK_BEARING_CLAIM_IDS"
+        ],
+        "verificationNeeded": [],
+        "suggestedAction": "Correct the identifier to \"history.high_recent_churn\" in the set."
+      },
+      {
+        "title": "New test will fail due to mismatched claim name",
+        "category": "Test failure",
+        "severity": "High",
+        "confidence": "Confirmed",
+        "evidenceStrength": "Direct",
+        "status": "Defect",
+        "proofType": "test_failure",
+        "explanation": "The added test asserts that `isRiskBearingClaim` returns true for `history.high_recent_churn`, but the implementation set contains the misspelled `history.high_recent_curn`, causing the assertion to fail.",
+        "whyItMatters": "The CI pipeline will reject the PR, masking other potential issues and preventing the intended behavior from being verified.",
+        "evidence": [
+          "frontend/src/lib/claimVocabulary.test.js diff lines adding test for \"history.high_recent_churn\""
+        ],
+        "affectedFiles": [
+          "frontend/src/lib/claimVocabulary.test.js"
+        ],
+        "affectedSymbols": [
+          "isRiskBearingClaim test case"
+        ],
+        "verificationNeeded": [],
+        "suggestedAction": "Align the claim name in both the set and the test (use the correct spelling)."
+      },
+      {
+        "title": "Behavioral regression in highestTier precedence",
+        "category": "Bug",
+        "severity": "Critical",
+        "confidence": "Confirmed",
+        "evidenceStrength": "Direct",
+        "status": "Regression risk",
+        "proofType": "behavioral_regression",
+        "explanation": "The early return for `REQUIRES_IMMEDIATE_REVIEW` was moved after the `STANDARD_REVIEW` check, so a file that qualifies for immediate review will now be classified as standard review instead.",
+        "whyItMatters": "Urgent review signals may be downgraded, potentially allowing high‑risk changes to slip through without proper scrutiny.",
+        "evidence": [
+          "frontend/src/lib/reviewTiers.js diff showing reordered `if` statements"
+        ],
+        "affectedFiles": [
+          "frontend/src/lib/reviewTiers.js"
+        ],
+        "affectedSymbols": [
+          "highestTier"
+        ],
+        "verificationNeeded": [],
+        "suggestedAction": "Restore the original precedence: check for `REQUIRES_IMMEDIATE_REVIEW` before `STANDARD_REVIEW`."
+      }
+    ],
+    "total_reported": 3,
+    "rejected_count": 0,
+    "parse_error": null
+  },
+  "review_context": {
+    "commit_summary": {
+      "message": "Treat history.high_recent_churn as risk-bearing\n\n## Summary\n- \\`history.high_recent_churn\\` (5+ changes to a file in the last 30 days) is already computed by the backend but was never included in the frontend's risk-bearing claim set, so it never affected file tiering.\n- Added it to \\`RISK_BEARING_CLAIM_IDS\\` alongside the existing \\`history.hot_file\\`/\\`history.first_author_touch\\` signals, updated \\`FILE_TIER_RULE\\`'s description to match, and added a regression test.\n\n## Test plan\n- [x] \\`claimVocabulary.test.js\\` passes\n- [x] \\`FILE_TIER_RULE\\`'s text matches the actual behavior\n\n---\n*Demo note (remove before merging): this PR is deliberately paired with #2 for testing the PR-review tool's analysis. It looks like the same change but intentionally contains real, verifiable defects -- one caught by the existing automated test suite, one a logic bug no current test covers.*\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
+      "changed_files": [
+        "frontend/src/lib/claimVocabulary.js",
+        "frontend/src/lib/claimVocabulary.test.js",
+        "frontend/src/lib/reviewTiers.js"
+      ],
+      "added_files": [],
+      "deleted_files": [],
+      "modified_files": [
+        "frontend/src/lib/claimVocabulary.js",
+        "frontend/src/lib/claimVocabulary.test.js",
+        "frontend/src/lib/reviewTiers.js"
+      ],
+      "renamed_files": []
+    },
+    "commit_claims": [
+      {
+        "claim": "shape.narrow_change",
+        "scope": {
+          "level": "commit",
+          "file_path": null,
+          "qualified_name": null
+        },
+        "confidence": "inferred",
+        "basis": [
+          "change_set"
+        ],
+        "module": "change_shape"
+      },
+      {
+        "claim": "shape.heterogeneous_categories",
+        "scope": {
+          "level": "commit",
+          "file_path": null,
+          "qualified_name": null
+        },
+        "confidence": "observed",
+        "basis": [
+          "file_classification"
+        ],
+        "module": "change_shape"
+      },
+      {
+        "claim": "shape.touches_tests",
+        "scope": {
+          "level": "commit",
+          "file_path": null,
+          "qualified_name": null
+        },
+        "confidence": "observed",
+        "basis": [
+          "change_categories"
+        ],
+        "module": "change_shape"
+      },
+      {
+        "claim": "verification.test_files_changed",
+        "scope": {
+          "level": "commit",
+          "file_path": null,
+          "qualified_name": null
+        },
+        "confidence": "observed",
+        "basis": [
+          "file_classification"
+        ],
+        "module": "verification_coverage"
+      }
+    ],
+    "file_claims": {},
+    "gaps": {
+      "commit": [],
+      "files": {
+        "frontend/src/lib/claimVocabulary.js": [
+          {
+            "reason": "cannot_assess_contract",
+            "scope": {
+              "level": "file",
+              "file_path": "frontend/src/lib/claimVocabulary.js",
+              "qualified_name": null
+            },
+            "missing": [
+              "semantic_analysis"
+            ],
+            "module": "contract_stability"
+          },
+          {
+            "reason": "cannot_assess_body_evidence",
+            "scope": {
+              "level": "file",
+              "file_path": "frontend/src/lib/claimVocabulary.js",
+              "qualified_name": null
+            },
+            "missing": [
+              "semantic_analysis"
+            ],
+            "module": "body_evidence"
+          }
+        ],
+        "frontend/src/lib/claimVocabulary.test.js": [
+          {
+            "reason": "cannot_assess_contract",
+            "scope": {
+              "level": "file",
+              "file_path": "frontend/src/lib/claimVocabulary.test.js",
+              "qualified_name": null
+            },
+            "missing": [
+              "semantic_analysis"
+            ],
+            "module": "contract_stability"
+          },
+          {
+            "reason": "cannot_assess_body_evidence",
+            "scope": {
+              "level": "file",
+              "file_path": "frontend/src/lib/claimVocabulary.test.js",
+              "qualified_name": null
+            },
+            "missing": [
+              "semantic_analysis"
+            ],
+            "module": "body_evidence"
+          }
+        ],
+        "frontend/src/lib/reviewTiers.js": [
+          {
+            "reason": "cannot_assess_contract",
+            "scope": {
+              "level": "file",
+              "file_path": "frontend/src/lib/reviewTiers.js",
+              "qualified_name": null
+            },
+            "missing": [
+              "semantic_analysis"
+            ],
+            "module": "contract_stability"
+          },
+          {
+            "reason": "cannot_assess_body_evidence",
+            "scope": {
+              "level": "file",
+              "file_path": "frontend/src/lib/reviewTiers.js",
+              "qualified_name": null
+            },
+            "missing": [
+              "semantic_analysis"
+            ],
+            "module": "body_evidence"
+          }
+        ]
+      }
+    },
+    "coverage_ledger": []
+  },
+  "observations": {
+    "touched_directories": {
+      "source": [
+        "frontend/"
+      ],
+      "tests": [],
+      "documentation": [],
+      "examples": [],
+      "scripts": []
+    },
+    "file_classification": {
+      "frontend/src/lib/claimVocabulary.js": "Source",
+      "frontend/src/lib/claimVocabulary.test.js": "Test",
+      "frontend/src/lib/reviewTiers.js": "Source"
+    },
+    "change_statistics": {
+      "files_added": 0,
+      "files_deleted": 0,
+      "files_modified": 3,
+      "files_renamed": 0
+    },
+    "change_categories": {
+      "touches_tests": true,
+      "touches_documentation": false,
+      "touches_dependencies": false,
+      "touches_build_files": false,
+      "touches_ci": false,
+      "touches_config": false
+    },
+    "extraction_confidence": {
+      "unknown_file_count": 0,
+      "unsupported_extensions": [],
+      "skipped_binary_file_count": 0
+    },
+    "diff_stats": {
+      "total_insertions": 8,
+      "total_deletions": 3,
+      "files": {
+        "frontend/src/lib/claimVocabulary.js": {
+          "insertions": 1,
+          "deletions": 0
+        },
+        "frontend/src/lib/claimVocabulary.test.js": {
+          "insertions": 4,
+          "deletions": 0
+        },
+        "frontend/src/lib/reviewTiers.js": {
+          "insertions": 3,
+          "deletions": 3
+        }
+      }
+    }
+  },
+  "pr_number": 3,
+  "base_sha": "4f2ea6934c05064b90cfa0fa135bd3fc4cdb355f",
+  "head_sha": "785d6ec410b74ac8164b475b77b7bbbebbe0a7c2"
+}

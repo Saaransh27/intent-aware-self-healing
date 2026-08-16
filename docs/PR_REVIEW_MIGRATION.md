@@ -177,6 +177,17 @@ review: { raw: str, parsed: bool, sections: {verdict, what_changed_and_why,
           what_deserves_attention_ranked, open_questions, minor_notes} | null }
 findings: []                    # always empty — ADR-016's category-1 catalogue is unbuilt
 validation: { outcome, findings: [{rule, severity, message, location}] } | null
+structured_findings: {          # Milestone 8 — parsed from the model's own section-3
+                                 # JSON, strictly validated; distinct from `findings`
+                                 # above (that field remains ADR-016's own, unrelated,
+                                 # still-unbuilt mechanism)
+    state: "ok" | "reduced" | "unavailable",
+    findings: [{title, category, severity, confidence, evidenceStrength, status,
+                proofType, explanation, whyItMatters, evidence: [str],
+                affectedFiles: [str], affectedSymbols: [str],
+                verificationNeeded: [str], suggestedAction}],
+    total_reported: int, rejected_count: int, parse_error: str | null,
+} | null
 review_context: {               # Milestone 26 — same object fed to the prompt
     commit_summary: {message, changed_files, added_files, deleted_files,
                       modified_files, renamed_files: [{old_path, path}]},

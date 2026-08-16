@@ -7,10 +7,12 @@ import PRNavigation from "../components/PRNavigation";
 import ReviewLoadingState from "../components/ReviewLoadingState";
 import EmptyState from "../components/EmptyState";
 import ReviewVerdict from "../components/ReviewVerdict";
+import ReviewAtAGlance from "../components/ReviewAtAGlance";
 import StaleReviewBanner from "../components/StaleReviewBanner";
 import CommitStats from "../components/CommitStats";
 import IntentVsImplementation from "../components/IntentVsImplementation";
 import ReviewFindings from "../components/ReviewFindings";
+import WhatChanged from "../components/WhatChanged";
 import BlindSpots from "../components/BlindSpots";
 import TestSignal from "../components/TestSignal";
 import FileOverview from "../components/FileOverview";
@@ -21,14 +23,18 @@ import SupportingDetails from "../components/SupportingDetails";
 // for PRHeader) and the review itself (slow — a real clone + LLM call).
 // The header doesn't wait on the review to render.
 //
-// Milestone 7 (Review Intelligence): the information architecture below
-// follows the order the milestone spec fixed — PR Header, Review Verdict,
-// Intent vs Implementation, Findings, Blind Spots, Test Coverage, File
-// Overview, Supporting Details — reusing the same visual design system
-// throughout. findings/verdict/intentVsImplementation/blindSpots are all
-// derived once per render from the real response (see
+// Milestone 8, Part B: information architecture redesigned around the
+// backend's own structured findings (Milestone 7's order is superseded
+// here) — PR Header, Review Status (compact, dominant), Review at a
+// Glance (jump links), Intent vs Implementation, Findings (primary
+// content, filterable), What Changed (deterministic directory
+// walkthrough), Risk Hotspots (renamed File Overview), What We Could Not
+// Verify (renamed Blind Spots, honest non-bug language), Test Impact
+// (renamed Test Signal, explicit pass≠safety framing), Supporting Details
+// (collapsed, unchanged). findings/verdict/intentVsImplementation/
+// blindSpots are all derived once per render from the real response (see
 // lib/reviewIntelligence.js) and threaded to every component that needs
-// them, rather than each component re-parsing the raw text itself.
+// them, rather than each component re-parsing the raw data itself.
 //
 // Fix pass (precision re-review): ExecutiveSummary was originally still
 // rendered here too, directly under ReviewVerdict -- its own content
@@ -131,18 +137,27 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
   const hasSections = reviewData?.review?.parsed && sections;
   const reviewContext = reviewData?.review_context ?? null;
   const observations = reviewData?.observations ?? null;
+  const structuredFindings = reviewData?.structured_findings ?? null;
 
   const findings = useMemo(
-    () => (hasSections ? buildFindings(sections.what_deserves_attention_ranked, reviewContext) : []),
-    [hasSections, sections, reviewContext]
+    () => (hasSections ? buildFindings(structuredFindings?.findings) : []),
+    [hasSections, structuredFindings]
   );
-  const verdict = useMemo(() => deriveVerdict(findings), [findings]);
+  const verdict = useMemo(
+    () => deriveVerdict(findings, structuredFindings?.state ?? "unavailable"),
+    [findings, structuredFindings]
+  );
   const claimedIntent = prDetail?.title || reviewContext?.commit_summary?.message?.split("\n")[0] || "";
   const intentVsImplementation = useMemo(
     () => deriveIntentVsImplementation(claimedIntent, findings),
     [claimedIntent, findings]
   );
   const blindSpots = useMemo(() => deriveBlindSpots(findings), [findings]);
+  const riskHotspotFileCount = useMemo(
+    () => new Set(findings.flatMap((f) => f.affectedFiles)).size,
+    [findings]
+  );
+  const touchesTests = !!observations?.change_categories?.touches_tests;
 
   return (
     <div className="pr-detail-page">
@@ -180,30 +195,37 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
           />
           <CommitStats reviewContext={reviewContext} observations={observations} />
           <ReviewVerdict verdict={verdict} findings={findings} />
+          <ReviewAtAGlance
+            findings={findings}
+            blindSpotsCount={blindSpots.length}
+            riskHotspotFileCount={riskHotspotFileCount}
+            touchesTests={touchesTests}
+          />
           <IntentVsImplementation intentVsImplementation={intentVsImplementation} />
           <ReviewFindings
             rawText={sections.what_deserves_attention_ranked}
             findings={findings}
+            structuredState={structuredFindings?.state ?? "unavailable"}
             selectedFile={selectedFile}
             onSelectFile={setSelectedFile}
             reviewContext={reviewContext}
+          />
+          <WhatChanged reviewContext={reviewContext} observations={observations} findings={findings} />
+          <FileOverview
+            reviewContext={reviewContext}
+            observations={observations}
+            findings={findings}
+            selectedFile={selectedFile}
+            onSelectFile={setSelectedFile}
+            owner={owner}
+            repo={repo}
+            headSha={reviewData.head_sha}
           />
           <BlindSpots blindSpots={blindSpots} />
           <TestSignal
             observations={observations}
             findings={findings}
             intentVsImplementation={intentVsImplementation}
-          />
-          <FileOverview
-            reviewContext={reviewContext}
-            observations={observations}
-            findings={findings}
-            changeText={sections.what_changed_and_why}
-            selectedFile={selectedFile}
-            onSelectFile={setSelectedFile}
-            owner={owner}
-            repo={repo}
-            headSha={reviewData.head_sha}
           />
           <SupportingDetails sections={sections} reviewContext={reviewContext} observations={observations} />
         </>

@@ -11,17 +11,13 @@ import pr3Response from "../test/fixtures/real_pr_review_response.pr3_incorrect.
 // verdict. This proves the fix end to end against the real captured data.
 describe("FileOverview — real PR #3 data (Part 13 fix)", () => {
   it("shows reviewTiers.js with an elevated real risk level, not silently Low", () => {
-    const findings = buildFindings(
-      pr3Response.review.sections.what_deserves_attention_ranked,
-      pr3Response.review_context
-    );
+    const findings = buildFindings(pr3Response.structured_findings.findings);
 
     render(
       <FileOverview
         reviewContext={pr3Response.review_context}
         observations={pr3Response.observations}
         findings={findings}
-        changeText={pr3Response.review.sections.what_changed_and_why}
         selectedFile={null}
         onSelectFile={vi.fn()}
       />

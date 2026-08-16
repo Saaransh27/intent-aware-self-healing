@@ -213,7 +213,11 @@ Three layers, one strict rule between them:
   multiple commits; a systematic failure, not expected model variance; and
   a proposed fix demonstrably verified not to introduce a larger
   regression. See `docs/modules/prompt_builder.md` and `MILESTONES.md`
-  (Milestones 10B, 15B, 15C, 15D, 15E).
+  (Milestones 10B, 15B, 15C, 15D, 15E). **Revised once, for section 3 only**,
+  in Milestone 39/Milestone 8 (2026-08-16) — the freeze's own four
+  conditions were met by two real, repeatable classifier failures; see
+  `docs/modules/prompt_builder.md`'s Milestone 8 update section for the
+  exact change and why the rest of `SYSTEM_PROMPT` remains untouched.
 - **`src/pipeline/`** (Milestone 14B) — the reusable orchestration layer,
   sibling to `src/api/`, extracted from Milestone 13's original script so both
   the CLI and the API share one implementation. `orchestrator.py`:
@@ -454,6 +458,50 @@ re-verified against real PR #3 data. The Behavioral Change detection
 extraction it was always supposed to have (`buildBehavioralDetail`),
 rendered by `BlindSpots.jsx`. See `docs/MILESTONE_7_REVIEW_INTELLIGENCE.md`
 for the complete itemized list.
+
+## Milestone 39 (Milestone 8: Review Intelligence Reliability and UX)
+
+Real, live production use (fresh, non-cached model generations against
+the same two real demo PRs Milestone 7 evaluated against) surfaced two
+repeatable failures in Milestone 36/38's keyword-based classifier: a
+benign fact phrased with the word "Confirmed" pushed a safe PR to `HIGH
+RISK`; a real defect worded with "order" instead of "ordering" was missed
+by the behavioral-change keyword list. Rather than add more keywords, the
+classification mechanism itself was replaced. `src/prompt/prompt_builder.py`'s
+section 3 ("What deserves attention, ranked") now requires a fenced JSON
+array of structured findings, each schema-defined
+(`src/api/models.py:StructuredFinding`, 14 fields, `Literal`-typed enums) —
+the first revision to Prompt v1 since its Milestone 15E freeze, made only
+because the freeze's own stated bar (real, repeatable, systematic,
+verified fix) was met. A new module, `src/response_validation/structured_findings.py`,
+extracts and strictly validates this JSON server-side, independent of
+`response_validator.py`'s existing prose-contract checks (which don't
+apply to structured array fields — see that module's own doc for a
+disclosed, pre-existing, unrelated false-positive it can produce on
+prose sections). Exposed as a new `structured_findings` field on
+`ReviewResponse`/`PRReviewResponse`, alongside (never replacing) the
+existing, still-always-empty ADR-016 `findings` field — a deliberately
+separate mechanism. `frontend/src/lib/reviewIntelligence.js`'s keyword
+classifiers (`classifyConfidence`/`classifySeverity`/`classifyCategory`/
+`isBehavioralChange`) are removed entirely; verdict aggregation, intent-
+vs-implementation, and behavioral-change detection now read the
+backend's own structured fields (`severity`/`confidence`/`status`/
+`proofType`/`category`) directly and deterministically — `HIGH RISK` now
+requires Confirmed confidence, Critical/High severity, and a real-risk
+status together, never confidence alone. See
+`docs/modules/prompt_builder.md` and `docs/modules/structured_findings.md`
+for the full account.
+
+`PRDetail.jsx`'s section order was restructured (Review Status, Review at
+a Glance, Findings as primary filterable content, a new deterministic
+"What Changed" directory walkthrough, Risk Hotspots, What We Could Not
+Verify, Test Impact, Supporting Details) — presentation and copy changes
+plus two new small components (`ReviewAtAGlance.jsx`, `WhatChanged.jsx`);
+no existing visual design system, backend reasoning/prompt/adapter
+pipeline (beyond the section-3 contract amendment above), or repository-
+selection code was touched. See `docs/MILESTONE_8_REVIEW_INTELLIGENCE_AND_UX.md`
+for the complete itemized account, including disclosed known limitations
+and explicitly out-of-scope items.
 
 ## Not yet built
 

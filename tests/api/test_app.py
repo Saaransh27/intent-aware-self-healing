@@ -402,7 +402,8 @@ class ResponseValidationIntegrationTests(unittest.TestCase):
             set(body.keys()),
             {
                 "repository_url", "commit_hash", "outcome", "adapter_state", "review",
-                "findings", "validation", "review_context", "observations",
+                "findings", "validation", "structured_findings", "review_context",
+                "observations",
             },
         )
         self.assertEqual(body["outcome"], "evaluated")
@@ -650,7 +651,8 @@ class PRReviewApiTests(unittest.TestCase):
 
         commit_review_fields = {
             "repository_url", "commit_hash", "outcome", "adapter_state", "review",
-            "findings", "validation", "review_context", "observations",
+            "findings", "validation", "structured_findings", "review_context",
+            "observations",
         }
         self.assertTrue(commit_review_fields.issubset(body.keys()))
         self.assertEqual(body.keys() - commit_review_fields, {"pr_number", "base_sha", "head_sha"})

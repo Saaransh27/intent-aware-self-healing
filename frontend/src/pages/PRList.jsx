@@ -13,8 +13,8 @@ const NOT_REVIEWED = "Not reviewed";
 // returns them (unchanged, deliberate, since Milestone 4 -- see below).
 function riskStatusFor(cached) {
   if (!cached?.review?.parsed) return { label: NOT_REVIEWED, level: null };
-  const findings = buildFindings(cached.review.sections.what_deserves_attention_ranked, cached.review_context);
-  const verdict = deriveVerdict(findings);
+  const findings = buildFindings(cached.structured_findings?.findings);
+  const verdict = deriveVerdict(findings, cached.structured_findings?.state ?? "unavailable");
   return { label: verdict.level, level: verdict.level };
 }
 

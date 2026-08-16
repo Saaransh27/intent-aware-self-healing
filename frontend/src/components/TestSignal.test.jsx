@@ -9,7 +9,7 @@ import pr3Response from "../test/fixtures/real_pr_review_response.pr3_incorrect.
 // displayed the basic, honest fact that it touched test files at all.
 describe("TestSignal", () => {
   it("always shows the plain 'Tests changed: yes' fact, even alongside a real test mismatch warning", () => {
-    const findings = buildFindings(pr3Response.review.sections.what_deserves_attention_ranked, pr3Response.review_context);
+    const findings = buildFindings(pr3Response.structured_findings.findings);
     const intentVsImplementation = deriveIntentVsImplementation("Treat history.high_recent_churn as risk-bearing", findings);
 
     render(

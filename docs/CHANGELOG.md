@@ -1,5 +1,61 @@
 # Changelog
 
+## 2026-08-16 (Milestone 8 — Review Intelligence Reliability and UX)
+
+Full detail: `docs/MILESTONE_8_REVIEW_INTELLIGENCE_AND_UX.md`. Fresh (non-cached)
+live model generations against the same two real demo PRs Milestone 7
+evaluated surfaced two real, repeatable classifier failures: a benign fact
+phrased with "Confirmed" pushed a safe PR to `HIGH RISK` (severity and
+confidence conflated into one keyword signal); a real defect worded with
+"order" instead of "ordering" was missed by the behavioral-change keyword
+list. Explicit instruction: replace the classification mechanism, not add
+more keywords.
+
+- **Prompt change (first revision to Prompt v1 since its Milestone 15E
+  freeze)**: `src/prompt/prompt_builder.py`'s section 3 now requires a
+  fenced JSON array of structured findings (14 fields each, `Literal`-typed
+  enums — `src/api/models.py:StructuredFinding`), with an explicit
+  six-question justification requirement for `confidence` and language
+  stating that word choice in a finding's own prose carries no
+  classification weight. A follow-up fix, found on the very first live
+  test: the finding-level confidence vocabulary is now explicitly
+  distinguished from the separate four-term prose vocabulary used
+  elsewhere in the response (the model had bled "Likely" across the two).
+- **New**: `src/response_validation/structured_findings.py` — extracts and
+  strictly validates this JSON server-side; mechanical repair only
+  (casing/whitespace/bare-string-to-array/trailing-comma); anything else
+  is a rejected finding, never fabricated. Reports `state: "ok"`/
+  `"reduced"`/`"unavailable"`, exposed as a new `structured_findings`
+  field on `ReviewResponse`/`PRReviewResponse` (both endpoints), separate
+  from the existing, still-empty ADR-016 `findings` field.
+- **`frontend/src/lib/reviewIntelligence.js` rewritten**: the Milestone 7
+  keyword classifiers (`classifyConfidence`/`classifySeverity`/
+  `classifyCategory`/`isBehavioralChange`) are removed. `deriveVerdict` now
+  requires Confirmed confidence **and** Critical/High severity **and** a
+  real-risk status together for `HIGH RISK` — never confidence alone.
+  `deriveIntentVsImplementation`/behavioral-change detection read
+  `status`/`proofType`/`category` directly. `attributeFindingsToFiles`
+  reads each finding's own `affectedFiles` field instead of cross-
+  referencing quoted identifiers against prose.
+- **PRDetail redesigned**: new order — Review Status (renamed
+  `ReviewVerdict`, visually strengthened), Review at a Glance (new,
+  `ReviewAtAGlance.jsx`, jump links with real counts), Intent vs
+  Implementation, Findings (primary content, new severity/confidence/
+  category filters on structured fields only), What Changed (new,
+  `WhatChanged.jsx`, deterministic directory-grouped walkthrough), Risk
+  Hotspots (renamed `FileOverview`), What We Could Not Verify (renamed
+  `BlindSpots`, reworded to honest non-bug language), Test Impact
+  (renamed `TestSignal`, explicit "tests passing ≠ safe" disclaimer),
+  Supporting Details (unchanged). Optional sticky sidebar (spec's B10)
+  deliberately not built — disclosed, not silently skipped.
+- Real fixtures regenerated via live end-to-end calls using the actual
+  updated response code (not hand-edited); repository selection confirmed
+  unchanged (12 tests, untouched files).
+
+318 backend tests, 114 frontend tests across 19 files (was 125 across
+16 files — net new coverage on top of Milestone 7's, some rewritten for
+the new structured-field shape); build and lint clean.
+
 ## 2026-08-15 (Milestone 7 precision fix pass — 7 real gaps found and fixed)
 
 Full detail: `docs/MILESTONE_7_REVIEW_INTELLIGENCE.md`. A self-audit against
