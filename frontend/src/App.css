@@ -1314,6 +1314,7 @@ button[type="submit"]:disabled {
 .review-section-grid {
   height: 100%;
   min-height: 0;
+  min-width: 0;
   display: flex;
 }
 
@@ -1338,6 +1339,7 @@ button[type="submit"]:disabled {
   align-items: center;
   gap: var(--space-2);
   width: 100%;
+  min-width: 0;
   text-align: left;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -2125,6 +2127,7 @@ button.empty-state-action {
 .confidence-panel {
   height: 100%;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
