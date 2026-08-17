@@ -19,20 +19,18 @@ import FileOverview from "./FileOverview";
 
 const FILE_RANK = { [SEVERITY_CRITICAL]: 0, [SEVERITY_HIGH]: 1, [SEVERITY_MEDIUM]: 2, [SEVERITY_LOW]: 3 };
 
-function basename(path) {
-  return path.slice(path.lastIndexOf("/") + 1);
-}
-
 // Milestone 9 (command-deck redesign): the 6 fixed-order sections that
 // used to render stacked and always-visible now render as one clickable
 // card each, in the same order -- clicking opens the section's own
 // existing component, completely unchanged, inside a SectionOverlay.
-// Every card's own count/preview is read from the exact same real data
-// its detail view renders, so a card can never promise something its
-// own overlay doesn't show. Supporting Details stays outside this grid,
-// exactly where it already was -- it's deliberately secondary/collapsed
-// by its own design, not one of this milestone's primary command-deck
-// cards.
+// Every card's own count is read from the exact same real data its
+// detail view renders, so a card can never promise something its own
+// overlay doesn't show. Fix pass (fixed-viewport deck): cards are now
+// title + count only, no preview sentence -- there isn't room for one in
+// a 2-column-by-3-row grid sized to share a screen with two other
+// columns. Supporting Details stays outside this grid entirely, exactly
+// where it already was -- it's deliberately secondary/collapsed by its
+// own design, not one of this milestone's primary command-deck cards.
 function ReviewSectionGrid({
   sections,
   findings,
@@ -73,7 +71,6 @@ function ReviewSectionGrid({
       dot: confirmed.length > 0 ? "crit" : "safe",
       count: String(confirmed.length),
       countTone: confirmed.length > 0 ? "crit" : "zero",
-      preview: confirmed[0]?.title || "No confirmed defects in this change.",
       render: () => (
         <ConfirmedIssues
           rawText={rawFindingsText}
@@ -92,7 +89,6 @@ function ReviewSectionGrid({
       dot: openQuestions.length > 0 ? "warn" : "safe",
       count: String(openQuestions.length),
       countTone: openQuestions.length > 0 ? "" : "zero",
-      preview: openQuestions[0]?.title || "No open questions for this change.",
       render: () => (
         <UnconfirmedFindings
           rawText={rawFindingsText}
@@ -110,7 +106,6 @@ function ReviewSectionGrid({
       dot: intentVsImplementation.consistency === "MISMATCH" ? "crit" : "safe",
       count: intentVsImplementation.consistency,
       countTone: intentVsImplementation.consistency === "MISMATCH" ? "crit" : "zero",
-      preview: inference.rows.find((r) => !r.matched)?.text || "Implementation matches intent.",
       render: () => <IntentVsImplementation intentVsImplementation={intentVsImplementation} />,
     },
     {
@@ -120,7 +115,6 @@ function ReviewSectionGrid({
       dot: testImpactFindings.length > 0 ? "warn" : "safe",
       count: `${testImpactFindings.length} test${testImpactFindings.length === 1 ? "" : "s"}`,
       countTone: testImpactFindings.length > 0 ? "" : "zero",
-      preview: testImpactFindings[0] ? basename(testImpactFindings[0].affectedFiles[0] || "") : "No test impact identified.",
       render: () => (
         <TestSignal observations={observations} findings={findings} intentVsImplementation={intentVsImplementation} />
       ),
@@ -132,7 +126,6 @@ function ReviewSectionGrid({
       dot: "neutral",
       count: `${changedFilePaths.length} file${changedFilePaths.length === 1 ? "" : "s"}`,
       countTone: "",
-      preview: changedFilePaths.slice(0, 2).map(basename).join(", ") || "No files changed.",
       render: () => <ChangeStory reviewContext={reviewContext} observations={observations} findings={findings} />,
     },
     {
@@ -142,7 +135,6 @@ function ReviewSectionGrid({
       dot: topHotspot ? "crit" : "safe",
       count: `${hotspots.length} file${hotspots.length === 1 ? "" : "s"}`,
       countTone: hotspots.length > 0 ? "crit" : "zero",
-      preview: topHotspot ? `${basename(topHotspot[0])} — ${topHotspot[1]}` : "No elevated-risk files identified.",
       render: () => (
         <FileOverview
           reviewContext={reviewContext}
@@ -170,15 +162,9 @@ function ReviewSectionGrid({
             className="section-card"
             onClick={() => setActiveKey(card.key)}
           >
-            <div className="section-card-top">
-              <h3 className="section-card-title">
-                <span className={`dot dot-${card.dot}`} aria-hidden="true" />
-                {card.title}
-              </h3>
-              <span className="section-card-chevron" aria-hidden="true">▸</span>
-            </div>
+            <span className={`dot dot-${card.dot}`} aria-hidden="true" />
+            <h3 className="section-card-title">{card.title}</h3>
             <span className={`count-chip${card.countTone ? ` count-chip-${card.countTone}` : ""}`}>{card.count}</span>
-            <p className="section-card-preview">{card.preview}</p>
           </button>
         ))}
       </div>

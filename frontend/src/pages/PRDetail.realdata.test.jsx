@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import PRDetail from "./PRDetail";
@@ -45,7 +46,10 @@ describe("PRDetail against a real, captured POST /review/pr response", () => {
       ).toBeTruthy()
     );
 
-    // Real files from the real review_context actually render.
+    // Real files from the real review_context actually render -- Change
+    // Story is now a command-deck card, so open it to reach the full
+    // per-file list underneath.
+    await userEvent.click(screen.getByRole("button", { name: /Change Story/ }));
     for (const path of realResponse.review_context.commit_summary.changed_files) {
       expect(screen.getAllByText(new RegExp(path.split("/").pop())).length).toBeGreaterThan(0);
     }

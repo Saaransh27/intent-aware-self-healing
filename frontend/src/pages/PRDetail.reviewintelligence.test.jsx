@@ -53,6 +53,10 @@ describe("PRDetail review intelligence — real captured PR #2 (correct)", () =>
       expect(screen.queryByText("SAFE TO REVIEW") || screen.queryByText("REVIEWER ATTENTION")).toBeTruthy()
     );
     expect(screen.queryByText("HIGH RISK")).not.toBeInTheDocument();
+
+    // Confirmed Issues is now a command-deck card -- open it to reach
+    // the real empty-state message underneath.
+    await userEvent.click(screen.getByRole("button", { name: /Confirmed Issues/ }));
     expect(screen.getByText("No confirmed defects in this change.")).toBeInTheDocument();
   });
 });

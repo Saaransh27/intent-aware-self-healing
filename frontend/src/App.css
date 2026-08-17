@@ -1311,11 +1311,20 @@ button[type="submit"]:disabled {
    overlay above, just sized for a section's own full detail view -- a
    card's click never navigates away or discards the page underneath. */
 
+.review-section-grid {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+}
+
 .section-grid {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-4);
-  margin: var(--space-6) 0;
+  grid-template-columns: repeat(2, 1fr);
+  grid-auto-rows: 1fr;
+  gap: var(--space-2);
+  overflow-y: auto;
 }
 
 @media (max-width: 720px) {
@@ -1325,13 +1334,15 @@ button[type="submit"]:disabled {
 }
 
 .section-card {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   width: 100%;
   text-align: left;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
-  padding: var(--space-4);
+  padding: var(--space-2) var(--space-3);
   cursor: pointer;
   font-family: inherit;
   transition: border-color 0.15s ease, transform 0.15s ease;
@@ -1339,45 +1350,23 @@ button[type="submit"]:disabled {
 
 .section-card:hover {
   border-color: var(--color-border-strong);
-  transform: translateY(-2px);
-}
-
-.section-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
+  transform: translateY(-1px);
 }
 
 .section-card-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--color-text);
-}
-
-.section-card-chevron {
-  color: var(--color-text-muted);
-  font-size: 11px;
-  transition: transform 0.15s ease, color 0.15s ease;
-}
-
-.section-card:hover .section-card-chevron {
-  transform: translateX(2px);
-  color: var(--color-accent);
-}
-
-.section-card-preview {
-  margin: var(--space-2) 0 0;
-  font-size: 12px;
-  color: var(--color-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.section-card .count-chip {
+  flex-shrink: 0;
 }
 
 .dot {
@@ -1605,11 +1594,33 @@ button.empty-state-action {
 
 .repo-workspace {
   max-width: 1150px;
+  height: 100%;
   margin: 0 auto;
 }
 
+/* Fixed-viewport command deck (fix pass): .pr-detail-page fills its
+   parent's full real height so the flex column below never needs to
+   overflow -- PRHeader/PRNavigation/the stale banner take their natural
+   height, .review-deck (flex: 1) absorbs whatever's left, and nothing
+   here ever forces .app-shell-main to show a page-level scrollbar. The
+   soft blue glow (strong right at the border, fading out through two
+   wider/fainter halos) is the one visual boundary around this whole
+   thing -- replacing individual gaps/borders between PR header, nav, and
+   the deck below, which is what allows those internal margins to shrink. */
+
 .pr-detail-page {
   max-width: 1150px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(110, 126, 232, 0.4);
+  box-shadow:
+    0 0 0 1px rgba(110, 126, 232, 0.1),
+    0 0 28px 2px rgba(110, 126, 232, 0.12),
+    0 0 64px 12px rgba(110, 126, 232, 0.06);
 }
 
 /* Login gate -------------------------------------------------------------- */
@@ -2083,22 +2094,42 @@ button.empty-state-action {
    real Inferred Intent / Implementation-vs-Intent summary. Reuses the
    existing severity token set -- no new palette. */
 
-.review-confidence-header {
-  margin: var(--space-6) 0;
+/* Fixed-viewport command deck (fix pass, prompted directly against the
+   deployed page): .review-deck is everything from the stale-review
+   banner down through Reviewer Action, sized to fill whatever height
+   .pr-detail-page's flex layout leaves it -- see .pr-detail-page below
+   for the outer glow border and the height chain this depends on
+   (.app-shell-main -> .repo-workspace -> .pr-detail-page all need an
+   explicit height for a percentage-based fill to work; a percentage
+   height against an auto-height ancestor resolves to nothing). Each of
+   the three .deck-columns panels gets its own overflow-y so a PR with
+   an unusually long list degrades to an internal scrollbar in that one
+   column rather than silently clipping content. */
+
+.review-deck {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
-.confidence-panels {
+.deck-columns {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: var(--space-4);
-  align-items: stretch;
+  grid-template-columns: 210px 1fr 380px;
+  gap: var(--space-2);
 }
 
 .confidence-panel {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  padding: var(--space-5);
+  padding: var(--space-3);
 }
 
 .confidence-eyebrow {
@@ -2284,18 +2315,41 @@ button.empty-state-action {
 }
 
 @media (max-width: 720px) {
-  .confidence-panels {
+  /* A genuinely narrow/short viewport can't fit three columns plus a
+     fixed-height footer without something giving -- here, the deck
+     itself scrolls instead of clipping content, rather than pretending
+     three full-width stacked columns would still fit one screen. */
+  .deck-columns {
     grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .review-deck {
+    overflow-y: auto;
   }
 }
 
-/* Reviewer action -- a compact, real checklist. */
+/* Reviewer action -- a compact, real checklist. Fix pass (fixed-viewport
+   deck): now the deck's full-width bottom row, a fixed height rather than
+   growing with the checklist -- a PR with a long real checklist scrolls
+   inside .reviewer-action-list instead of pushing the deck taller than
+   the screen. */
 
 .reviewer-action {
-  margin: var(--space-6) 0;
+  flex-shrink: 0;
+  height: 130px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  padding: var(--space-3);
 }
 
 .reviewer-action-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   list-style: none;
   margin: var(--space-3) 0 0;
   padding: 0;

@@ -6,32 +6,29 @@ import PRHeader from "../components/PRHeader";
 import PRNavigation from "../components/PRNavigation";
 import ReviewLoadingState from "../components/ReviewLoadingState";
 import EmptyState from "../components/EmptyState";
-import ReviewConfidenceHeader from "../components/ReviewConfidenceHeader";
-import ReviewerAction from "../components/ReviewerAction";
-import StaleReviewBanner from "../components/StaleReviewBanner";
-import ReviewSectionGrid from "../components/ReviewSectionGrid";
+import ReviewDeck from "../components/ReviewDeck";
 
 // The review workspace for one PR. Two independent fetches, deliberately
 // not chained: PR metadata (fast, real additions/deletions/changed_files
 // for PRHeader) and the review itself (slow — a real clone + LLM call).
 // The header doesn't wait on the review to render.
 //
-// Milestone 9 (command-deck redesign): the page is now a single-screen
-// command deck instead of ten always-stacked sections. ReviewConfidenceHeader
-// (a categorical verdict ring + the real Inferred Intent / Implementation-
-// vs-Intent summary) and ReviewerAction (the actionable checklist) stay
-// always visible -- everything a reviewer needs to decide "should I be
-// worried" in the first few seconds. The remaining six sections (Confirmed
-// Issues, Open Questions, Intent -> Implementation -> Test, Test Impact,
-// Change Story, Risk Hotspots) are now ReviewSectionGrid's clickable cards:
-// each card's own count/preview and its full detail view (unchanged
-// components, just relocated into a SectionOverlay on click) both read the
-// exact same real data, so a card can never promise something its detail
-// doesn't show. The underlying analysis functions in lib/reviewIntelligence.js
-// are untouched; only where and how their output renders changed.
-// findings/verdict/intentVsImplementation are all derived once per render
-// from the real response and threaded to every component that needs them,
-// rather than each component re-parsing the raw data itself.
+// Milestone 9 (command-deck redesign): the page is a single-screen
+// command deck instead of ten always-stacked sections. ReviewDeck (see
+// that file, and .review-deck/.deck-columns in App.css) is the fixed-
+// viewport block -- StaleReviewBanner, a 3-column row (VerdictPanel /
+// InferencePanel / ReviewSectionGrid's 6 cards, 2x3), and ReviewerAction
+// as a full-width bottom row with its own internal scroll -- built so a
+// reviewer never has to scroll the page to see everything at once. Each
+// of the 6 cards' own count and its full detail view (unchanged
+// components, just relocated into a SectionOverlay on click) both read
+// the exact same real data, so a card can never promise something its
+// detail doesn't show. The underlying analysis functions in
+// lib/reviewIntelligence.js are untouched; only where and how their
+// output renders changed. findings/verdict/intentVsImplementation are
+// all derived once per render from the real response and threaded down
+// to ReviewDeck, rather than each component re-parsing the raw data
+// itself.
 //
 // Fix pass (declutter, prompted directly against the deployed page):
 // CommitStats and SupportingDetails no longer render here. CommitStats'
@@ -188,37 +185,23 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
       )}
 
       {reviewStatus === "success" && hasSections && (
-        <>
-          <StaleReviewBanner
-            reviewedHeadSha={reviewData.head_sha}
-            currentHeadSha={prDetail?.head_sha}
-            onReviewAgain={handleReviewAgain}
-          />
-
-          {/* Always-visible: verdict + real inferred-intent summary */}
-          <ReviewConfidenceHeader verdict={verdict} findings={findings} intentVsImplementation={intentVsImplementation} />
-
-          {/* Always-visible: the actionable checklist */}
-          <ReviewerAction findings={findings} />
-
-          {/* Command-deck cards: Confirmed Issues, Open Questions,
-              Intent -> Implementation -> Test, Test Impact, Change Story,
-              Risk Hotspots -- each opens its own unchanged detail view in
-              a SectionOverlay on click. */}
-          <ReviewSectionGrid
-            sections={sections}
-            findings={findings}
-            structuredState={structuredFindings?.state ?? "unavailable"}
-            intentVsImplementation={intentVsImplementation}
-            observations={observations}
-            reviewContext={reviewContext}
-            selectedFile={selectedFile}
-            onSelectFile={setSelectedFile}
-            owner={owner}
-            repo={repo}
-            headSha={reviewData.head_sha}
-          />
-        </>
+        <ReviewDeck
+          verdict={verdict}
+          findings={findings}
+          intentVsImplementation={intentVsImplementation}
+          sections={sections}
+          structuredState={structuredFindings?.state ?? "unavailable"}
+          observations={observations}
+          reviewContext={reviewContext}
+          selectedFile={selectedFile}
+          onSelectFile={setSelectedFile}
+          owner={owner}
+          repo={repo}
+          headSha={reviewData.head_sha}
+          reviewedHeadSha={reviewData.head_sha}
+          currentHeadSha={prDetail?.head_sha}
+          onReviewAgain={handleReviewAgain}
+        />
       )}
 
       {reviewStatus === "success" && reviewData && !hasSections && (
