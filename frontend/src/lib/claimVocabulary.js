@@ -220,6 +220,7 @@ const RISK_BEARING_CLAIM_IDS = new Set([
   "history.first_author_touch",
   "history.hot_file",
   "reach.expected_co_change_partner_missing",
+  "history.long_dormant_reactivated",
 ]);
 
 export function isRiskBearingClaim(claimEntry) {
