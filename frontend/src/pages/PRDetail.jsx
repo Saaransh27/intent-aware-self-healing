@@ -9,9 +9,7 @@ import EmptyState from "../components/EmptyState";
 import ReviewConfidenceHeader from "../components/ReviewConfidenceHeader";
 import ReviewerAction from "../components/ReviewerAction";
 import StaleReviewBanner from "../components/StaleReviewBanner";
-import CommitStats from "../components/CommitStats";
 import ReviewSectionGrid from "../components/ReviewSectionGrid";
-import SupportingDetails from "../components/SupportingDetails";
 
 // The review workspace for one PR. Two independent fetches, deliberately
 // not chained: PR metadata (fast, real additions/deletions/changed_files
@@ -29,27 +27,35 @@ import SupportingDetails from "../components/SupportingDetails";
 // each card's own count/preview and its full detail view (unchanged
 // components, just relocated into a SectionOverlay on click) both read the
 // exact same real data, so a card can never promise something its detail
-// doesn't show. Supporting Details stays exactly where and how it was --
-// collapsed, outside the grid, by its own deliberate design. The underlying
-// analysis functions in lib/reviewIntelligence.js are untouched; only where
-// and how their output renders changed. findings/verdict/intentVsImplementation
-// are all derived once per render from the real response and threaded to
-// every component that needs them, rather than each component re-parsing
-// the raw data itself.
+// doesn't show. The underlying analysis functions in lib/reviewIntelligence.js
+// are untouched; only where and how their output renders changed.
+// findings/verdict/intentVsImplementation are all derived once per render
+// from the real response and threaded to every component that needs them,
+// rather than each component re-parsing the raw data itself.
 //
-// Fix pass (precision re-review): ExecutiveSummary was originally still
-// rendered here too -- its own content (verdict prose, priority files,
-// change bullets) turned out to be fully duplicated by the verdict header,
-// the now-fixed FileOverview (real risk-sorted files), and SupportingDetails'
-// own "What changed and why" accordion item -- exactly the redundant-card
-// clutter the spec warned against. Removed here only; ExecutiveSummary.jsx
-// itself is untouched and still used by the legacy commit-review flow, as
-// is ReviewFindings.jsx (ConfirmedIssues/UnconfirmedFindings below are new,
-// PRDetail-specific components, not a replacement of it). CommitStats
-// stays, positioned before the verdict header -- it is purely objective
-// per-commit metadata (files/lines/tests changed), not an assessment, so
-// it reads as an extension of the header rather than a competing
-// verdict-like section.
+// Fix pass (declutter, prompted directly against the deployed page):
+// CommitStats and SupportingDetails no longer render here. CommitStats'
+// file-count/+/- line duplicated PRHeader's own real GitHub stats
+// (computed from a different source -- our own diff extraction vs the
+// GitHub API -- but the same on-screen fact); its "Tests changed" line
+// is already the Test Impact card's own first line. Its one genuinely
+// unique fact, "Review scope: <tier>", has no replacement yet -- flagged,
+// not silently relocated. SupportingDetails' six always-present
+// accordion items (What changed and why / Open questions / Manual
+// verification / Review strategy / Minor notes / Raw evidence) are gone
+// from the page entirely; three of those (What changed and why, the raw-
+// prose Open questions, Raw evidence) are superseded by the command-deck
+// cards showing the same underlying data structured instead of as prose/
+// JSON, but Manual Verification's real extraction-confidence/gap facts
+// and Review Strategy's real routine-file grouping have no other home on
+// this page anymore -- also flagged, not silently dropped. ExecutiveSummary
+// was already removed in an earlier pass for the same reason (fully
+// duplicated content) and is untouched, still used by the legacy
+// commit-review flow -- as is ReviewFindings.jsx (ConfirmedIssues/
+// UnconfirmedFindings below are new, PRDetail-specific components, not a
+// replacement of it), and CommitStats.jsx/SupportingDetails.jsx
+// themselves, neither deleted, both still real components just no longer
+// imported here.
 function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
   const [prDetail, setPrDetail] = useState(null);
   const [detailError, setDetailError] = useState(null);
@@ -184,12 +190,10 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
       {reviewStatus === "success" && hasSections && (
         <>
           <StaleReviewBanner
-            reviewedAt={reviewData._reviewedAt}
             reviewedHeadSha={reviewData.head_sha}
             currentHeadSha={prDetail?.head_sha}
             onReviewAgain={handleReviewAgain}
           />
-          <CommitStats reviewContext={reviewContext} observations={observations} />
 
           {/* Always-visible: verdict + real inferred-intent summary */}
           <ReviewConfidenceHeader verdict={verdict} findings={findings} intentVsImplementation={intentVsImplementation} />
@@ -213,14 +217,6 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
             owner={owner}
             repo={repo}
             headSha={reviewData.head_sha}
-          />
-
-          {/* Supporting Details -- stays collapsed, outside the grid */}
-          <SupportingDetails
-            sections={sections}
-            reviewContext={reviewContext}
-            observations={observations}
-            structuredFindings={structuredFindings}
           />
         </>
       )}

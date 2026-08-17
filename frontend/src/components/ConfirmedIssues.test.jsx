@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import ConfirmedIssues from "./ConfirmedIssues";
 import { buildFindings } from "../lib/reviewIntelligence";
@@ -29,7 +30,7 @@ function structuredFinding(overrides) {
 // for the legacy commit-review flow) so Confirmed Issues can be its own
 // command-deck card. Same real behavior, ported from ReviewFindings.test.jsx.
 describe("ConfirmedIssues", () => {
-  it("renders Evidence as its own labeled field, separate from the explanation", () => {
+  it("renders Evidence as its own facet tab, separate from the description, and only shows its identifiers once opened", async () => {
     const findings = buildFindings([
       structuredFinding({ evidence: ["history.high_recent_curn", "history.high_recent_churn"] }),
     ]);
@@ -46,8 +47,38 @@ describe("ConfirmedIssues", () => {
     );
 
     expect(screen.getByText("Evidence")).toBeInTheDocument();
+    expect(screen.queryByText("history.high_recent_curn")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("Evidence"));
     expect(screen.getByText("history.high_recent_curn")).toBeInTheDocument();
     expect(screen.getByText("history.high_recent_churn")).toBeInTheDocument();
+  });
+
+  it("only shows one facet's content at a time, per card", async () => {
+    const findings = buildFindings([
+      structuredFinding({ evidence: ["history.high_recent_curn"] }),
+    ]);
+
+    render(
+      <ConfirmedIssues
+        rawText={RAW_TEXT}
+        findings={findings}
+        structuredState="ok"
+        selectedFile={null}
+        onSelectFile={vi.fn()}
+        reviewContext={{ file_claims: {} }}
+      />
+    );
+
+    await userEvent.click(screen.getByText("Why it matters"));
+    expect(screen.getByText("The risk signal will not be recognized at runtime.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("Evidence"));
+    expect(screen.queryByText("The risk signal will not be recognized at runtime.")).not.toBeInTheDocument();
+    expect(screen.getByText("history.high_recent_curn")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("Evidence"));
+    expect(screen.queryByText("history.high_recent_curn")).not.toBeInTheDocument();
   });
 
   it("never shows an Evidence label when the finding cites no identifiers", () => {

@@ -9,6 +9,16 @@ import { attributeFindingsToFiles, findingsForFile, fileSeverity, SEVERITY_LOW }
 // etc, from observations.file_classification). No dependency graph, no
 // invented relationship between files -- purely per-file, in the
 // commit's own real changed-file order.
+//
+// Fix pass (flagged directly: "which files changed but not what changed
+// in them"): a flagged file now shows the finding's own "explanation"
+// (a full sentence written for exactly this) instead of just its
+// shorter title, and every file's real +/- line count (already
+// extracted, already shown in Risk Hotspots' expanded row, just not
+// here) renders alongside it. A routine file with neither an attributed
+// finding nor a risk-bearing claim still only gets its category label --
+// there is no real per-file "what changed" narrative for those today,
+// so nothing is invented to fill that gap.
 const CLASSIFICATION_PURPOSE = {
   Test: "Test coverage",
   Documentation: "Documentation",
@@ -18,7 +28,7 @@ const CLASSIFICATION_PURPOSE = {
 };
 
 function purposeFor(file, topFinding) {
-  if (topFinding) return topFinding.title;
+  if (topFinding) return topFinding.explanation || topFinding.title;
   return CLASSIFICATION_PURPOSE[file.category] || "Source change";
 }
 
@@ -49,6 +59,18 @@ function ChangeStory({ reviewContext, observations, findings }) {
                 <span className="badge badge-change-type">{file.changeType}</span>
                 {risk !== SEVERITY_LOW && (
                   <span className={`badge badge-severity-${risk.toLowerCase()}`}>{risk}</span>
+                )}
+                {file.lineStats && (
+                  <span className="change-story-linestats">
+                    {file.lineStats.insertions === null ? (
+                      "Binary file"
+                    ) : (
+                      <>
+                        <span className="stat-additions">+{file.lineStats.insertions}</span>{" "}
+                        <span className="stat-deletions">-{file.lineStats.deletions}</span>
+                      </>
+                    )}
+                  </span>
                 )}
               </p>
             </li>

@@ -146,15 +146,18 @@ describe("PRDetail", () => {
   });
 
   // Milestone 7 (Part 18 / Case D): never silently show a stale analysis.
+  // Command-deck redesign: the banner now renders nothing at all (not
+  // even a passive "based on PR state at review time" line) when the
+  // review isn't stale -- only the genuinely actionable case shows up.
   it("does not show a stale warning when the cached review's head_sha matches the PR's current one", async () => {
     authApi.fetchPullRequestDetail.mockResolvedValue(PR_DETAIL); // head_sha: "head0000"
     const cache = new Map([[42, PARSEABLE_RESPONSE]]); // also head_sha: "head0000"
 
     renderDetail(42, cache);
 
-    await waitFor(() => expect(screen.getByText(/Based on PR state at review time/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("SAFE TO REVIEW")).toBeInTheDocument());
     expect(screen.queryByText("Review again")).not.toBeInTheDocument();
-    expect(screen.queryByText(/This PR has changed since then/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/This PR has changed/)).not.toBeInTheDocument();
   });
 
   it("shows 'PR changed since last review' and a working 'Review again' when the head_sha no longer matches", async () => {
@@ -164,7 +167,7 @@ describe("PRDetail", () => {
 
     renderDetail(42, cache);
 
-    await waitFor(() => expect(screen.getByText(/This PR has changed since then/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/This PR has changed since this review ran/)).toBeInTheDocument());
     const reviewAgainButton = screen.getByText("Review again");
 
     reviewAgainButton.click();

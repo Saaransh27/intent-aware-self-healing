@@ -451,6 +451,11 @@ button[type="submit"]:disabled {
   color: var(--color-text-secondary);
 }
 
+.change-story-linestats {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
 /* File overview — a compact, sorted table. Sanctioned accent touchpoint
    (selected row) — everything else avoids color, using type weight and
    the tier tag alone for hierarchy. */
@@ -690,6 +695,62 @@ button[type="submit"]:disabled {
 }
 
 .finding-explanation {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+/* Milestone 9 — Finding facets: same real fields as .finding-explanation/
+   .finding-why-it-matters/etc. above (those stay, still used by the
+   legacy commit-review flow's own FindingCard), just for the command-
+   deck's ConfirmedIssues/UnconfirmedFindings cards -- a one-sentence
+   description plus a row of colored tabs, one facet's content open at a
+   time per card. */
+
+.finding-description {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.finding-facet-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--space-3);
+}
+
+.finding-facet-tab {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--facet-color);
+  background: var(--facet-color-bg);
+  border: 1px solid var(--facet-color-border);
+  border-radius: var(--radius-xs);
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.finding-facet-tab:hover {
+  filter: brightness(1.15);
+}
+
+.finding-facet-tab-open {
+  box-shadow: 0 0 0 1px var(--facet-color) inset;
+}
+
+.finding-facet-panel {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--facet-color-border);
+  background: var(--color-surface-alt);
+}
+
+.finding-facet-text {
   margin: 0;
   font-size: 13px;
   line-height: 1.55;

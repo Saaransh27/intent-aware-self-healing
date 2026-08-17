@@ -66,8 +66,14 @@ describe("PRDetail review intelligence — real captured PR #3 (defective, ident
     );
     expect(screen.queryByText("SAFE TO REVIEW")).not.toBeInTheDocument();
     expect(screen.getByText("MISMATCH")).toBeInTheDocument();
+
     // The real, distinguishing evidence: the two actual conflicting
-    // identifiers, quoted verbatim from the model's own real response.
+    // identifiers, quoted verbatim from the model's own real response --
+    // now behind Confirmed Issues -> each finding's own Evidence facet tab.
+    await userEvent.click(screen.getByRole("button", { name: /Confirmed Issues/ }));
+    for (const tab of screen.getAllByText("Evidence")) {
+      await userEvent.click(tab);
+    }
     expect(screen.getAllByText((_, node) => node?.textContent?.includes("history.high_recent_curn")).length).toBeGreaterThan(0);
   });
 

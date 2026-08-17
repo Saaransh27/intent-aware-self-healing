@@ -53,6 +53,32 @@
   --color-info-bg: rgba(123, 147, 176, 0.12);
   --color-info-border: rgba(123, 147, 176, 0.35);
 
+  /* Finding-card facet tabs (Milestone 9) -- purely decorative
+     differentiation between "Why it matters"/"Evidence"/"To verify"/
+     "Next"/"Affected files" on one finding card. Deliberately NOT drawn
+     from danger/warning/safe/info -- those mean severity/confidence
+     everywhere else in this app, and reusing one here would make a tab
+     read as a risk signal it isn't. */
+  --color-facet-why: #3fb6c4;
+  --color-facet-why-bg: rgba(63, 182, 196, 0.12);
+  --color-facet-why-border: rgba(63, 182, 196, 0.35);
+
+  --color-facet-evidence: #a875e8;
+  --color-facet-evidence-bg: rgba(168, 117, 232, 0.12);
+  --color-facet-evidence-border: rgba(168, 117, 232, 0.35);
+
+  --color-facet-verify: #e07ba3;
+  --color-facet-verify-bg: rgba(224, 123, 163, 0.12);
+  --color-facet-verify-border: rgba(224, 123, 163, 0.35);
+
+  --color-facet-next: #a8c43f;
+  --color-facet-next-bg: rgba(168, 196, 63, 0.12);
+  --color-facet-next-border: rgba(168, 196, 63, 0.35);
+
+  --color-facet-files: #4f9fe0;
+  --color-facet-files-bg: rgba(79, 159, 224, 0.12);
+  --color-facet-files-border: rgba(79, 159, 224, 0.35);
+
   --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
