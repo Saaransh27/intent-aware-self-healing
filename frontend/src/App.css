@@ -418,6 +418,10 @@ button[type="submit"]:disabled {
 /* Change Story — a real, per-file purpose walkthrough (renamed from
    "What Changed"). */
 
+.change-story {
+  margin: var(--space-6) 0;
+}
+
 .change-story-list {
   list-style: decimal;
   margin: 0;
@@ -450,6 +454,10 @@ button[type="submit"]:disabled {
 /* File overview — a compact, sorted table. Sanctioned accent touchpoint
    (selected row) — everything else avoids color, using type weight and
    the tier tag alone for hierarchy. */
+
+.file-overview {
+  margin: var(--space-6) 0;
+}
 
 .file-table {
   border: 1px solid var(--color-border);
@@ -594,6 +602,10 @@ button[type="submit"]:disabled {
 
 /* Review findings — grouped by Critical/Medium/Low (a real, disclosed
    rule — see reviewTiers.js), not the model's raw rank order. */
+
+.review-findings {
+  margin: var(--space-6) 0;
+}
 
 .findings-filters {
   display: flex;
@@ -1367,11 +1379,12 @@ button.empty-state-action {
    other. */
 
 .repo-workspace {
-  max-width: 900px;
+  max-width: 1150px;
+  margin: 0 auto;
 }
 
 .pr-detail-page {
-  max-width: 900px;
+  max-width: 1150px;
 }
 
 /* Login gate -------------------------------------------------------------- */
@@ -1498,10 +1511,6 @@ button.empty-state-action {
 }
 
 /* PR list ------------------------------------------------------------------ */
-
-.pr-list-page {
-  max-width: 860px;
-}
 
 .pr-list-heading {
   font-size: 18px;
@@ -1683,8 +1692,12 @@ button.empty-state-action {
   gap: 6px;
   font-size: 12.5px;
   font-weight: 500;
+  font-family: inherit;
   color: var(--color-text-secondary);
   text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
   padding: 6px 8px;
   border-radius: var(--radius-sm);
 }
@@ -1700,9 +1713,6 @@ button.empty-state-action {
   cursor: default;
 }
 
-.pr-nav-link-list {
-  color: var(--color-text-muted);
-}
 
 /* Review loading state --------------------------------------------------------- */
 
@@ -1764,6 +1774,7 @@ button.empty-state-action {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  margin: var(--space-6) 0;
 }
 
 .supporting-details-item {
@@ -1850,7 +1861,7 @@ button.empty-state-action {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-4) var(--space-5);
-  margin: var(--space-4) 0;
+  margin: var(--space-6) 0;
   background: var(--color-surface);
 }
 
@@ -1959,6 +1970,10 @@ button.empty-state-action {
 }
 
 /* Reviewer action -- a compact, real checklist. */
+
+.reviewer-action {
+  margin: var(--space-6) 0;
+}
 
 .reviewer-action-list {
   list-style: none;
@@ -2093,7 +2108,7 @@ button.empty-state-action {
 /* Intent vs Implementation */
 
 .intent-vs-implementation {
-  margin: var(--space-5) 0;
+  margin: var(--space-6) 0;
 }
 
 .intent-flow {
@@ -2195,7 +2210,7 @@ button.empty-state-action {
 /* Test / validation signal */
 
 .test-signal {
-  margin: var(--space-5) 0;
+  margin: var(--space-6) 0;
 }
 
 .test-signal-item {
