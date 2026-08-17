@@ -147,14 +147,14 @@ function ReviewFindings({ rawText, findings, structuredState, selectedFile, onSe
     if (structuredState === "ok") {
       return (
         <section id="confirmed-issues" className="review-findings">
-          <h2 className="section-heading">Confirmed issues</h2>
+          <h2 className="section-heading">Confirmed Issues</h2>
           <p className="section-hint">Nothing in this change was flagged as requiring special attention.</p>
         </section>
       );
     }
     return (
       <section id="confirmed-issues" className="review-findings">
-        <h2 className="section-heading">Confirmed issues</h2>
+        <h2 className="section-heading">Confirmed Issues</h2>
         <p className="review-verdict-confidence-reduced">
           Analysis confidence reduced — the model's structured findings for this review could not be fully
           validated. Showing its raw response below instead of a parsed findings list.
@@ -190,7 +190,7 @@ function ReviewFindings({ rawText, findings, structuredState, selectedFile, onSe
   return (
     <>
       <section id="confirmed-issues" className="review-findings">
-        <h2 className="section-heading">Confirmed issues</h2>
+        <h2 className="section-heading">Confirmed Issues</h2>
         <FindingsFilters findings={findings} filters={filters} onChange={setFilters} />
         {confirmedIssues.length === 0 ? (
           <p className="section-hint">No confirmed defects in this change.</p>
@@ -208,7 +208,7 @@ function ReviewFindings({ rawText, findings, structuredState, selectedFile, onSe
       </section>
 
       <section id="open-questions" className="review-findings">
-        <h2 className="section-heading">Open questions</h2>
+        <h2 className="section-heading">Open Questions</h2>
         <p className="section-hint">Not yet established as fact — worth a second look before merging.</p>
         {openQuestions.length === 0 ? (
           <p className="section-hint">No open questions for this change.</p>

@@ -35,7 +35,7 @@ function TestSignal({ observations, findings, intentVsImplementation }) {
 
   return (
     <section id="test-impact" className="test-signal">
-      <h2 className="section-heading">Test impact</h2>
+      <h2 className="section-heading">Test Impact</h2>
       <p className="section-hint">
         What changed about tests, not a safety verdict — passing or unaffected tests never mean the change itself
         is safe; see Review Verdict and Confirmed Issues above for the actual risk assessment.

@@ -3,18 +3,12 @@ import { useParams } from "react-router-dom";
 import { fetchOpenPullRequests } from "../lib/authApi";
 import PRList from "./PRList";
 import PRDetail from "./PRDetail";
-import PRRail from "../components/PRRail";
 
 // Owns the open-PR list fetch for one repository (once per owner/repo,
 // not once per PR) and a session-only review cache (a plain Map, reset
 // whenever this component remounts — no persistence, per Milestone 4's
 // "no database/Redis" boundary) so navigating PR #5 -> #6 -> back to #5
 // doesn't re-run a ~90s review it already has.
-//
-// Milestone 9: PRRail renders alongside PRList/PRDetail, reusing this
-// same fetch and cache — no second network call, no separate data
-// ownership. Only shown once the PR list actually loaded and there's
-// more than one PR to switch between.
 function RepoWorkspace() {
   const { owner, repo, number } = useParams();
   const [prState, setPrState] = useState({ status: "loading", data: [], error: null });
@@ -43,40 +37,27 @@ function RepoWorkspace() {
     };
   }, [owner, repo]);
 
-  const showRail = prState.status === "success" && prState.data.length > 1;
-
   return (
-    <div className={showRail ? "repo-workspace repo-workspace-with-rail" : "repo-workspace"}>
-      {showRail && (
-        <PRRail
+    <div className="repo-workspace">
+      {number ? (
+        <PRDetail
           owner={owner}
           repo={repo}
+          prNumber={Number(number)}
           pullRequests={prState.data}
           reviewCache={reviewCacheRef.current}
-          currentNumber={number ? Number(number) : null}
+        />
+      ) : (
+        <PRList
+          owner={owner}
+          repo={repo}
+          status={prState.status}
+          pullRequests={prState.data}
+          errorMessage={prState.error}
+          errorStatus={prState.errorStatus}
+          reviewCache={reviewCacheRef.current}
         />
       )}
-      <div className="repo-workspace-main">
-        {number ? (
-          <PRDetail
-            owner={owner}
-            repo={repo}
-            prNumber={Number(number)}
-            pullRequests={prState.data}
-            reviewCache={reviewCacheRef.current}
-          />
-        ) : (
-          <PRList
-            owner={owner}
-            repo={repo}
-            status={prState.status}
-            pullRequests={prState.data}
-            errorMessage={prState.error}
-            errorStatus={prState.errorStatus}
-            reviewCache={reviewCacheRef.current}
-          />
-        )}
-      </div>
     </div>
   );
 }

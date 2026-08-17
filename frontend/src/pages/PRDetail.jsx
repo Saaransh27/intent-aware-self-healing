@@ -173,7 +173,7 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
         <PRHeader owner={owner} repo={repo} pr={prDetail} />
       )}
 
-      <PRNavigation owner={owner} repo={repo} pullRequests={pullRequests} currentNumber={prNumber} />
+      <PRNavigation owner={owner} repo={repo} pullRequests={pullRequests} reviewCache={reviewCache} currentNumber={prNumber} />
 
       {reviewStatus === "loading" && <ReviewLoadingState prNumber={prNumber} retryAttempt={retryAttempt} />}
 

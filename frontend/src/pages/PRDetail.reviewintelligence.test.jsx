@@ -73,7 +73,7 @@ describe("PRDetail review intelligence — real captured PR #3 (defective, ident
   it("surfaces the tier-ordering regression in Confirmed Issues and flags reviewTiers.js in Risk Hotspots", async () => {
     renderPR(pr3Response, 3);
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Confirmed issues" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Confirmed Issues" })).toBeInTheDocument());
     expect(
       screen.getAllByText((_, node) => node?.textContent?.toLowerCase().includes("precedence")).length
     ).toBeGreaterThan(0);

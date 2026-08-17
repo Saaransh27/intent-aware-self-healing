@@ -25,7 +25,7 @@ function ReviewerAction({ findings }) {
 
   return (
     <section id="reviewer-action" className="reviewer-action">
-      <h2 className="section-heading">Reviewer action</h2>
+      <h2 className="section-heading">Reviewer Action</h2>
       <p className="section-hint">Before merging:</p>
       <ul className="reviewer-action-list">
         {toFix.map((action, i) => (
