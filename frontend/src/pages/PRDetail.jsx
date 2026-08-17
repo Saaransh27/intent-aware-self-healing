@@ -6,15 +6,11 @@ import PRHeader from "../components/PRHeader";
 import PRNavigation from "../components/PRNavigation";
 import ReviewLoadingState from "../components/ReviewLoadingState";
 import EmptyState from "../components/EmptyState";
-import ReviewVerdict from "../components/ReviewVerdict";
+import ReviewConfidenceHeader from "../components/ReviewConfidenceHeader";
 import ReviewerAction from "../components/ReviewerAction";
 import StaleReviewBanner from "../components/StaleReviewBanner";
 import CommitStats from "../components/CommitStats";
-import ReviewFindings from "../components/ReviewFindings";
-import IntentVsImplementation from "../components/IntentVsImplementation";
-import TestSignal from "../components/TestSignal";
-import ChangeStory from "../components/ChangeStory";
-import FileOverview from "../components/FileOverview";
+import ReviewSectionGrid from "../components/ReviewSectionGrid";
 import SupportingDetails from "../components/SupportingDetails";
 
 // The review workspace for one PR. Two independent fetches, deliberately
@@ -22,39 +18,38 @@ import SupportingDetails from "../components/SupportingDetails";
 // for PRHeader) and the review itself (slow — a real clone + LLM call).
 // The header doesn't wait on the review to render.
 //
-// Milestone 9 (UI/UX refinement): information architecture redesigned
-// again around the fixed 10-section order this milestone specified — PR
-// Header, Review Verdict (compact, dominant), Reviewer Action (a real
-// checklist), Confirmed Issues, Open Questions (ReviewFindings renders
-// both, strictly split by confidence tier so a finding never appears in
-// both), Intent → Implementation → Test (a visual flow, one of this
-// product's core differentiators), Test Impact, Change Story (renamed
-// from What Changed, per-file purpose instead of directory grouping),
-// Risk Hotspots (renamed File Overview, its per-file attribution bug
-// fixed), Supporting Details (collapsed, gained a Raw Evidence item).
-// Milestone 8's "Review at a Glance" jump-strip and "What We Could Not
-// Verify" section are retired here -- the former is now redundant with
-// the more prominent Review Verdict/Reviewer Action, and the latter's
-// content is exactly what "Open Questions" (non-confirmed findings) now
-// covers; the underlying analysis functions in lib/reviewIntelligence.js
-// (deriveBlindSpots, isBehavioralChange, etc.) are untouched, only their
-// dedicated page section is gone. findings/verdict/intentVsImplementation
+// Milestone 9 (command-deck redesign): the page is now a single-screen
+// command deck instead of ten always-stacked sections. ReviewConfidenceHeader
+// (a categorical verdict ring + the real Inferred Intent / Implementation-
+// vs-Intent summary) and ReviewerAction (the actionable checklist) stay
+// always visible -- everything a reviewer needs to decide "should I be
+// worried" in the first few seconds. The remaining six sections (Confirmed
+// Issues, Open Questions, Intent -> Implementation -> Test, Test Impact,
+// Change Story, Risk Hotspots) are now ReviewSectionGrid's clickable cards:
+// each card's own count/preview and its full detail view (unchanged
+// components, just relocated into a SectionOverlay on click) both read the
+// exact same real data, so a card can never promise something its detail
+// doesn't show. Supporting Details stays exactly where and how it was --
+// collapsed, outside the grid, by its own deliberate design. The underlying
+// analysis functions in lib/reviewIntelligence.js are untouched; only where
+// and how their output renders changed. findings/verdict/intentVsImplementation
 // are all derived once per render from the real response and threaded to
-// every component that needs them, rather than each component
-// re-parsing the raw data itself.
+// every component that needs them, rather than each component re-parsing
+// the raw data itself.
 //
 // Fix pass (precision re-review): ExecutiveSummary was originally still
-// rendered here too, directly under ReviewVerdict -- its own content
-// (verdict prose, priority files, change bullets) turned out to be fully
-// duplicated by ReviewVerdict (verdict), the now-fixed FileOverview (real
-// risk-sorted files), and SupportingDetails' own "What changed and why"
-// accordion item -- exactly the redundant-card clutter the spec warned
-// against. Removed here only; ExecutiveSummary.jsx itself is untouched
-// and still used by the legacy commit-review flow. CommitStats stays,
-// positioned before Review Verdict -- it is purely objective per-commit
-// metadata (files/lines/tests changed), not an assessment, so it reads
-// as an extension of the header rather than a competing verdict-like
-// section.
+// rendered here too -- its own content (verdict prose, priority files,
+// change bullets) turned out to be fully duplicated by the verdict header,
+// the now-fixed FileOverview (real risk-sorted files), and SupportingDetails'
+// own "What changed and why" accordion item -- exactly the redundant-card
+// clutter the spec warned against. Removed here only; ExecutiveSummary.jsx
+// itself is untouched and still used by the legacy commit-review flow, as
+// is ReviewFindings.jsx (ConfirmedIssues/UnconfirmedFindings below are new,
+// PRDetail-specific components, not a replacement of it). CommitStats
+// stays, positioned before the verdict header -- it is purely objective
+// per-commit metadata (files/lines/tests changed), not an assessment, so
+// it reads as an extension of the header rather than a competing
+// verdict-like section.
 function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
   const [prDetail, setPrDetail] = useState(null);
   const [detailError, setDetailError] = useState(null);
@@ -196,41 +191,23 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
           />
           <CommitStats reviewContext={reviewContext} observations={observations} />
 
-          {/* 2. Review Verdict */}
-          <ReviewVerdict verdict={verdict} findings={findings} />
+          {/* Always-visible: verdict + real inferred-intent summary */}
+          <ReviewConfidenceHeader verdict={verdict} findings={findings} intentVsImplementation={intentVsImplementation} />
 
-          {/* 3. Reviewer Action */}
+          {/* Always-visible: the actionable checklist */}
           <ReviewerAction findings={findings} />
 
-          {/* 4/5. Confirmed Issues + Open Questions (one component,
-              strictly split by confidence tier -- see ReviewFindings.jsx) */}
-          <ReviewFindings
-            rawText={sections.what_deserves_attention_ranked}
+          {/* Command-deck cards: Confirmed Issues, Open Questions,
+              Intent -> Implementation -> Test, Test Impact, Change Story,
+              Risk Hotspots -- each opens its own unchanged detail view in
+              a SectionOverlay on click. */}
+          <ReviewSectionGrid
+            sections={sections}
             findings={findings}
             structuredState={structuredFindings?.state ?? "unavailable"}
-            selectedFile={selectedFile}
-            onSelectFile={setSelectedFile}
-            reviewContext={reviewContext}
-          />
-
-          {/* 6. Intent -> Implementation -> Test */}
-          <IntentVsImplementation intentVsImplementation={intentVsImplementation} />
-
-          {/* 7. Test Impact */}
-          <TestSignal
-            observations={observations}
-            findings={findings}
             intentVsImplementation={intentVsImplementation}
-          />
-
-          {/* 8. Change Story */}
-          <ChangeStory reviewContext={reviewContext} observations={observations} findings={findings} />
-
-          {/* 9. Risk Hotspots */}
-          <FileOverview
-            reviewContext={reviewContext}
             observations={observations}
-            findings={findings}
+            reviewContext={reviewContext}
             selectedFile={selectedFile}
             onSelectFile={setSelectedFile}
             owner={owner}
@@ -238,7 +215,7 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
             headSha={reviewData.head_sha}
           />
 
-          {/* 10. Supporting Details */}
+          {/* Supporting Details -- stays collapsed, outside the grid */}
           <SupportingDetails
             sections={sections}
             reviewContext={reviewContext}

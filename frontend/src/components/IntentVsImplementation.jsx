@@ -1,6 +1,8 @@
 // Part 9, restyled for Milestone 9 as a real flow rather than a plain
-// table -- one of this product's core differentiators, so it stays a
-// visually prominent, always-visible section. claimedIntent is real (the
+// table -- one of this product's core differentiators, now rendered
+// inside a command-deck card's SectionOverlay rather than always-visible
+// on the page (its own card in ReviewSectionGrid previews the same real
+// consistency verdict at a glance). claimedIntent is real (the
 // PR's own title/commit message); implementation/test detail is real
 // (the model's own cited identifiers/evidence); consistency is only ever
 // MISMATCH when a real mismatch-shaped structured finding says so (see
@@ -22,7 +24,6 @@ function IntentVsImplementation({ intentVsImplementation }) {
 
   return (
     <section id="intent-flow" className="intent-vs-implementation">
-      <h2 className="section-heading">Intent → Implementation → Test</h2>
       <div className="intent-flow">
         <div className="intent-flow-step">
           <span className="intent-flow-label">Intent</span>

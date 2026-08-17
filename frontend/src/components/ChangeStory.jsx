@@ -33,7 +33,6 @@ function ChangeStory({ reviewContext, observations, findings }) {
 
   return (
     <section id="change-story" className="change-story">
-      <h2 className="section-heading">Change Story</h2>
       <p className="section-hint">
         What this commit does, file by file — grouped by its own real purpose, not a dependency graph.
       </p>

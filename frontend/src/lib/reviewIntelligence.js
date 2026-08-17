@@ -291,6 +291,42 @@ export function deriveIntentVsImplementation(claimedIntent, findings) {
     testDetail: [...new Set(testDetail)],
     consistency: mismatchFinding ? "MISMATCH" : "PASS",
     mismatchFinding,
+    mismatchShapedFindings: mismatchShaped,
+  };
+}
+
+// Milestone 9 (command-deck header): the same real signals already behind
+// Intent -> Implementation -> Test, just regrouped one row per finding
+// (its own title, never the raw evidence/identifier dump that section's
+// flow view shows) so the header stays a fast, readable summary. A
+// mismatch-shaped finding inherits the flow's own consistency verdict,
+// unless it's test-category-shaped, which is always "matched" for the
+// same reason IntentVsImplementation.jsx never marks a test wrong (a
+// failing test is the implementation's fault, not the test's). Confirmed
+// findings outside the mismatch-shaped set (e.g. a pure behavioral
+// regression with no intent/test counterpart) are still real mismatched
+// signal and get their own row, so a confirmed defect can never be
+// silently absent from this summary just because it doesn't fit the
+// intent/implementation/test shape.
+export function deriveInferenceSummary(intentVsImplementation, findings) {
+  const { consistency, mismatchShapedFindings } = intentVsImplementation;
+  const isMismatch = consistency === "MISMATCH";
+
+  const rows = mismatchShapedFindings.map((f) => {
+    const isTestShaped = f.category === CATEGORY_TEST_FAILURE || f.proofType === "test_failure";
+    return { matched: isTestShaped || !isMismatch, text: f.title || f.explanation };
+  });
+
+  const shapedIndexes = new Set(mismatchShapedFindings.map((f) => f.index));
+  const otherConfirmedDefects = findings.filter(
+    (f) => !f.isInformational && f.confidence === CONFIRMED && !shapedIndexes.has(f.index)
+  );
+  rows.push(...otherConfirmedDefects.map((f) => ({ matched: false, text: f.title || f.explanation })));
+
+  return {
+    matchedCount: rows.filter((r) => r.matched).length,
+    mismatchedCount: rows.filter((r) => !r.matched).length,
+    rows,
   };
 }
 

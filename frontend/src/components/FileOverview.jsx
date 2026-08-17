@@ -54,7 +54,6 @@ function FileOverview({ reviewContext, observations, findings, selectedFile, onS
 
   return (
     <section id="risk-hotspots" className="file-overview">
-      <h2 className="section-heading">Risk Hotspots</h2>
       <p className="section-hint">
         The files that deserve the most attention, sorted by real risk — reconciling deterministic risk-bearing
         signals with the findings actually attributed to each file, never a fabricated score.

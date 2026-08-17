@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import PRDetail from "./PRDetail";
@@ -74,13 +75,46 @@ describe("PRDetail review intelligence — real captured PR #3 (defective, ident
     renderPR(pr3Response, 3);
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Confirmed Issues" })).toBeInTheDocument());
+
+    // Milestone 9: the tier-ordering regression is a confirmed defect
+    // outside the Intent -> Implementation -> Test flow's own
+    // mismatch-shaped set, so it surfaces on the always-visible header's
+    // Implementation vs. Intent summary -- no click needed to see it.
     expect(
       screen.getAllByText((_, node) => node?.textContent?.toLowerCase().includes("precedence")).length
     ).toBeGreaterThan(0);
 
-    const row = screen.getAllByText("reviewTiers.js")
+    // Risk Hotspots is now a command-deck card -- open it to reach the
+    // real file table underneath.
+    await userEvent.click(screen.getByRole("button", { name: /Risk Hotspots/ }));
+    const row = (await screen.findAllByText("reviewTiers.js"))
       .map((el) => el.closest(".file-table-row"))
       .find(Boolean);
     expect(row.textContent).toMatch(/High|Critical/);
+  });
+
+  // Command-deck smoke test: every real card, opened and closed in turn,
+  // against real captured data -- catches a runtime rendering error in any
+  // of the six relocated detail views that a narrower, synthetic-fixture
+  // unit test could miss.
+  it("opens and closes every real command-deck card without a rendering error", async () => {
+    renderPR(pr3Response, 3);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Confirmed Issues" })).toBeInTheDocument());
+
+    const cardNames = [
+      "Confirmed Issues",
+      "Open Questions",
+      "Intent → Implementation → Test",
+      "Test Impact",
+      "Change Story",
+      "Risk Hotspots",
+    ];
+
+    for (const name of cardNames) {
+      await userEvent.click(screen.getByRole("button", { name: new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }));
+      expect(screen.getByRole("dialog", { name })).toBeInTheDocument();
+      await userEvent.click(screen.getByLabelText("Close"));
+      expect(screen.queryByRole("dialog", { name })).not.toBeInTheDocument();
+    }
   });
 });

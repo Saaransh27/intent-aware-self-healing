@@ -3,6 +3,7 @@ import {
   buildFindings,
   deriveVerdict,
   deriveIntentVsImplementation,
+  deriveInferenceSummary,
   deriveBlindSpots,
   attributeFindingsToFiles,
   findingsForFile,
@@ -255,5 +256,69 @@ describe("Milestone 9 — Risk Hotspots attribution: a file's reason must be its
     const matches = findingsForFile("src/other.js", findings);
     expect(matches).toHaveLength(1);
     expect(matches[0].title).toBe("Unrelated finding about another file");
+  });
+});
+
+describe("Milestone 9 — deriveInferenceSummary: header's 'Inferred Intent' / match-vs-mismatch rows", () => {
+  // Real signals only, regrouped one row per finding (its own title, never
+  // the raw evidence/identifier dump the flow view shows) -- the one
+  // addition is confirmed defects that aren't intent/implementation/test
+  // -shaped at all (a pure behavioral regression, say), which must still
+  // show up as their own mismatched row rather than silently vanishing.
+  const implMismatch = finding({
+    title: "Constant name mismatch",
+    severity: "High",
+    confidence: "Confirmed",
+    status: "Defect",
+    proofType: "direct_code_contradiction",
+    affectedSymbols: ["FOO_BAR", "FOO_BARR"],
+  });
+  const testMismatch = finding({
+    title: "Test correctly expects the other constant",
+    category: "Test failure",
+    severity: "High",
+    confidence: "Confirmed",
+    status: "Defect",
+    proofType: "test_failure",
+    affectedSymbols: ["FOO_BAR_TEST"],
+  });
+  const otherDefect = finding({
+    title: "Unrelated behavioral regression",
+    category: "Behavioral regression",
+    severity: "Critical",
+    confidence: "Confirmed",
+    status: "Regression risk",
+    proofType: "behavioral_regression",
+  });
+  const openQuestion = finding({ title: "Something merely uncertain" });
+  const findings = buildFindings([implMismatch, testMismatch, otherDefect, openQuestion]);
+  const intentVsImplementation = deriveIntentVsImplementation("Some claimed intent", findings);
+  const summary = deriveInferenceSummary(intentVsImplementation, findings);
+
+  it("marks a mismatch-shaped, non-test finding as mismatched when consistency is MISMATCH", () => {
+    expect(summary.rows).toEqual(
+      expect.arrayContaining([{ matched: false, text: "Constant name mismatch" }])
+    );
+  });
+
+  it("always marks a test-category-shaped finding as matched, regardless of overall consistency", () => {
+    expect(summary.rows).toEqual(
+      expect.arrayContaining([{ matched: true, text: "Test correctly expects the other constant" }])
+    );
+  });
+
+  it("includes a confirmed defect outside the mismatch-shaped set as its own mismatched row, by title", () => {
+    expect(summary.rows).toEqual(
+      expect.arrayContaining([{ matched: false, text: "Unrelated behavioral regression" }])
+    );
+  });
+
+  it("never includes a non-Confirmed finding — an open question is not a settled match or mismatch", () => {
+    expect(summary.rows.some((r) => r.text === "Something merely uncertain")).toBe(false);
+  });
+
+  it("tallies matchedCount/mismatchedCount from the same rows the UI renders", () => {
+    expect(summary.matchedCount).toBe(1);
+    expect(summary.mismatchedCount).toBe(2);
   });
 });
