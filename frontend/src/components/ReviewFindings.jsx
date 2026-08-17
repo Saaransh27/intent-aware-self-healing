@@ -1,14 +1,6 @@
 import { useMemo, useState } from "react";
 import { renderInlineMarkdown, renderMarkdownLite } from "../lib/textFormatting";
-import { CONFIRMED, STRONG_EVIDENCE, NEEDS_VERIFICATION } from "../lib/reviewIntelligence";
-
-const CONFIDENCE_ORDER = [CONFIRMED, STRONG_EVIDENCE, NEEDS_VERIFICATION];
-
-const NEXT_ACTION_BY_CONFIDENCE = {
-  [CONFIRMED]: "Fix before merging.",
-  [STRONG_EVIDENCE]: "Verify this inference before merging.",
-  [NEEDS_VERIFICATION]: "Verify before merging.",
-};
+import { CONFIRMED } from "../lib/reviewIntelligence";
 
 const ALL = "All";
 
@@ -45,13 +37,100 @@ function FindingsFilters({ findings, filters, onChange }) {
   );
 }
 
-// Milestone 8: every finding is now the backend's own validated structured
-// data (severity/confidence/category/evidence/affected-files/
-// suggestedAction), grouped by CONFIDENCE (Confirmed -> Strong evidence ->
-// Needs verification) so the distinction the product is built around is
-// visually obvious, not buried in prose. Purely informational findings
-// (e.g. a real but harmless rule-description update) are shown last,
-// visually de-emphasized, never mixed in with actionable ones.
+// One finding card, in the compact [SEVERITY] [STATUS] [CATEGORY] /
+// title / one-sentence explanation / "Why it matters" / "Evidence" /
+// "Next" / "Affected files" shape -- shared by both Confirmed Issues and
+// Open Questions below, since the two sections differ only in *which*
+// findings they show (by confidence tier), never in how one is rendered.
+function FindingCard({ finding, selectedFile, onSelectFile, reviewContext }) {
+  const isRelated = !!selectedFile && finding.affectedFiles.includes(selectedFile);
+  const isDimmed = !!selectedFile && !isRelated;
+
+  return (
+    <article
+      className={`finding-card${isRelated ? " finding-card-related" : ""}${isDimmed ? " finding-card-dimmed" : ""}`}
+    >
+      <div className="finding-card-top">
+        <span className={`badge badge-severity-${finding.severity.toLowerCase()}`}>{finding.severity}</span>
+        <span className="badge badge-status">{finding.status}</span>
+        <span className="badge badge-category">{finding.category}</span>
+      </div>
+      {finding.title && <h4 className="finding-title">{renderInlineMarkdown(finding.title)}</h4>}
+      <p className="finding-explanation">{renderInlineMarkdown(finding.explanation)}</p>
+      {finding.whyItMatters && (
+        <p className="finding-why-it-matters">
+          <strong>Why it matters: </strong>
+          {renderInlineMarkdown(finding.whyItMatters)}
+        </p>
+      )}
+
+      {/* Evidence as its own labeled field, separate from the narrative
+          explanation above -- the real identifiers/values/paths the
+          model itself cited to ground this finding. Never shown as a
+          fabricated bullet list when the model cited nothing; simply
+          omitted instead. */}
+      {finding.evidence.length > 0 && (
+        <div className="finding-evidence">
+          <span className="finding-field-label">Evidence</span>
+          <span className="finding-evidence-values">
+            {finding.evidence.map((id, i) => (
+              <code key={i} className="intent-code">{id}</code>
+            ))}
+          </span>
+        </div>
+      )}
+
+      {finding.verificationNeeded.length > 0 && (
+        <div className="finding-verification-needed">
+          <span className="finding-field-label">To verify</span>
+          <ul className="finding-verification-list">
+            {finding.verificationNeeded.map((item, i) => (
+              <li key={i}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {finding.suggestedAction && (
+        <p className="finding-next-action">
+          <strong>Next: </strong>
+          {finding.suggestedAction}
+        </p>
+      )}
+
+      {finding.affectedFiles.length > 0 && (
+        <div className="finding-affected-files">
+          <span className="finding-field-label">Affected file(s)</span>
+          <div className="finding-evidence-refs">
+            {finding.affectedFiles.map((name) => {
+              const claimCount = reviewContext?.file_claims?.[name]?.length || 0;
+              return (
+                <button
+                  type="button"
+                  key={name}
+                  className="finding-evidence-ref"
+                  onClick={() => onSelectFile(selectedFile === name ? null : name)}
+                >
+                  {name}
+                  {claimCount > 0 && <span className="finding-evidence-ref-count">{claimCount}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+// Milestone 9: Findings is now two strictly separate sections instead of
+// one, split by confidence tier -- Confirmed Issues (real, Confirmed-
+// tier problems the reviewer should fix) and Open Questions (Strong
+// evidence/Needs verification findings that are worth a second look but
+// aren't established fact). A finding appears in exactly one of the two,
+// never both -- the split key (confidence === CONFIRMED) is the same
+// field ReviewVerdict's summary line counts from, so the two can never
+// show contradictory numbers.
 function ReviewFindings({ rawText, findings, structuredState, selectedFile, onSelectFile, reviewContext }) {
   const [filters, setFilters] = useState({ severity: ALL, confidence: ALL, category: ALL });
 
@@ -67,15 +146,15 @@ function ReviewFindings({ rawText, findings, structuredState, selectedFile, onSe
     // it directly, rather than silently hidden.
     if (structuredState === "ok") {
       return (
-        <section id="findings" className="review-findings">
-          <h2 className="section-heading">Findings</h2>
+        <section id="confirmed-issues" className="review-findings">
+          <h2 className="section-heading">Confirmed issues</h2>
           <p className="section-hint">Nothing in this change was flagged as requiring special attention.</p>
         </section>
       );
     }
     return (
-      <section id="findings" className="review-findings">
-        <h2 className="section-heading">Findings</h2>
+      <section id="confirmed-issues" className="review-findings">
+        <h2 className="section-heading">Confirmed issues</h2>
         <p className="review-verdict-confidence-reduced">
           Analysis confidence reduced — the model's structured findings for this review could not be fully
           validated. Showing its raw response below instead of a parsed findings list.
@@ -92,121 +171,52 @@ function ReviewFindings({ rawText, findings, structuredState, selectedFile, onSe
       (filters.category === ALL || f.category === filters.category)
   );
   const actionable = filtered.filter((f) => !f.isInformational);
+  const confirmedIssues = actionable.filter((f) => f.confidence === CONFIRMED);
+  const openQuestions = actionable.filter((f) => f.confidence !== CONFIRMED);
   const informational = filtered.filter((f) => f.isInformational);
 
-  const grouped = CONFIDENCE_ORDER.map((confidence) => ({
-    confidence,
-    items: actionable.filter((f) => f.confidence === confidence),
-  })).filter((g) => g.items.length > 0);
-
-  function renderFinding(finding) {
-    const isRelated = !!selectedFile && finding.affectedFiles.includes(selectedFile);
-    const isDimmed = !!selectedFile && !isRelated;
-
+  function card(finding) {
     return (
-      <article
-        className={`finding-card${isRelated ? " finding-card-related" : ""}${isDimmed ? " finding-card-dimmed" : ""}`}
+      <FindingCard
         key={finding.index}
-      >
-        <div className="finding-card-top">
-          <span className={`badge badge-severity-${finding.severity.toLowerCase()}`}>{finding.severity}</span>
-          <span className={`badge badge-confidence-${finding.confidence.replace(/\s+/g, "-").toLowerCase()}`}>
-            {finding.confidence}
-          </span>
-          <span className="badge badge-category">{finding.category}</span>
-        </div>
-        {finding.title && <h4 className="finding-title">{renderInlineMarkdown(finding.title)}</h4>}
-        <p className="finding-explanation">{renderInlineMarkdown(finding.explanation)}</p>
-        {finding.whyItMatters && (
-          <p className="finding-why-it-matters">
-            <strong>Why it matters: </strong>
-            {renderInlineMarkdown(finding.whyItMatters)}
-          </p>
-        )}
-
-        {/* Evidence as its own labeled field, separate from the narrative
-            explanation above -- the real identifiers/values/paths the
-            model itself cited to ground this finding. Never shown as a
-            fabricated bullet list when the model cited nothing; simply
-            omitted instead. */}
-        {finding.evidence.length > 0 && (
-          <div className="finding-evidence">
-            <span className="finding-field-label">Evidence</span>
-            <span className="finding-evidence-values">
-              {finding.evidence.map((id, i) => (
-                <code key={i} className="intent-code">{id}</code>
-              ))}
-            </span>
-          </div>
-        )}
-
-        {finding.verificationNeeded.length > 0 && (
-          <div className="finding-verification-needed">
-            <span className="finding-field-label">To verify</span>
-            <ul className="finding-verification-list">
-              {finding.verificationNeeded.map((item, i) => (
-                <li key={i}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {!finding.isInformational && (
-          <p className="finding-next-action">
-            <strong>Next: </strong>
-            {finding.suggestedAction || NEXT_ACTION_BY_CONFIDENCE[finding.confidence]}
-          </p>
-        )}
-
-        {finding.affectedFiles.length > 0 && (
-          <div className="finding-affected-files">
-            <span className="finding-field-label">Affected file(s)</span>
-            <div className="finding-evidence-refs">
-              {finding.affectedFiles.map((name) => {
-                const claimCount = reviewContext?.file_claims?.[name]?.length || 0;
-                return (
-                  <button
-                    type="button"
-                    key={name}
-                    className="finding-evidence-ref"
-                    onClick={() => onSelectFile(selectedFile === name ? null : name)}
-                  >
-                    {name}
-                    {claimCount > 0 && <span className="finding-evidence-ref-count">{claimCount}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </article>
+        finding={finding}
+        selectedFile={selectedFile}
+        onSelectFile={onSelectFile}
+        reviewContext={reviewContext}
+      />
     );
   }
 
   return (
-    <section id="findings" className="review-findings">
-      <h2 className="section-heading">Findings</h2>
-      <FindingsFilters findings={findings} filters={filters} onChange={setFilters} />
-      {filtered.length === 0 && (
-        <p className="section-hint">No findings match the current filters.</p>
-      )}
-      {grouped.map(({ confidence, items }) => (
-        <div className="findings-group" key={confidence}>
-          <h3 className={`findings-group-label findings-group-label-${confidence.replace(/\s+/g, "-").toLowerCase()}`}>
-            {confidence} ({items.length})
-          </h3>
-          <div className="findings-list">{items.map(renderFinding)}</div>
-        </div>
-      ))}
-      {informational.length > 0 && (
-        <div className="findings-group findings-group-informational">
-          <h3 className="findings-group-label findings-group-label-informational">
-            Informational ({informational.length})
-          </h3>
-          <div className="findings-list">{informational.map(renderFinding)}</div>
-        </div>
-      )}
-    </section>
+    <>
+      <section id="confirmed-issues" className="review-findings">
+        <h2 className="section-heading">Confirmed issues</h2>
+        <FindingsFilters findings={findings} filters={filters} onChange={setFilters} />
+        {confirmedIssues.length === 0 ? (
+          <p className="section-hint">No confirmed defects in this change.</p>
+        ) : (
+          <div className="findings-list">{confirmedIssues.map(card)}</div>
+        )}
+        {informational.length > 0 && (
+          <div className="findings-group findings-group-informational">
+            <h3 className="findings-group-label findings-group-label-informational">
+              Informational ({informational.length})
+            </h3>
+            <div className="findings-list">{informational.map(card)}</div>
+          </div>
+        )}
+      </section>
+
+      <section id="open-questions" className="review-findings">
+        <h2 className="section-heading">Open questions</h2>
+        <p className="section-hint">Not yet established as fact — worth a second look before merging.</p>
+        {openQuestions.length === 0 ? (
+          <p className="section-hint">No open questions for this change.</p>
+        ) : (
+          <div className="findings-list">{openQuestions.map(card)}</div>
+        )}
+      </section>
+    </>
   );
 }
 

@@ -10,20 +10,19 @@ import pr3Response from "../test/fixtures/real_pr_review_response.pr3_incorrect.
 vi.mock("../lib/authApi");
 vi.mock("../lib/api");
 
-// Milestone 7/8 (Review Intelligence): these fixtures are the literal,
-// unmodified JSON bodies from real POST /review/pr calls against two real
-// PRs on a real repository -- PR #2 (a correct change, ground truth: 9/9
-// tests pass) and PR #3 (the same claimed change, ground truth: a real
-// typo that fails a real test, plus a real untested logic regression).
-// Regenerated for Milestone 8 against the live model with the new
-// structured-findings prompt (src/prompt/prompt_builder.py) -- the model
-// has no fixed seed, so exact wording/field values differ run to run; the
-// assertions below check the real, spec-critical outcomes (never HIGH RISK
-// for a correct change; always HIGH RISK for one with real defects), not
-// incidental wording from a single capture. Rendering both through the
-// real PRDetail component tree closes the loop between "the engine
-// classifies structured data correctly" (reviewIntelligence.test.js) and
-// "the full page renders that classification correctly with real API data."
+// Milestone 7/8/9 (Review Intelligence + UI refinement): these fixtures
+// are the literal, unmodified JSON bodies from real POST /review/pr calls
+// against two real PRs on a real repository -- PR #2 (a correct change,
+// ground truth: 9/9 tests pass) and PR #3 (the same claimed change,
+// ground truth: a real typo that fails a real test, plus a real untested
+// logic regression). The model has no fixed seed, so exact wording/field
+// values differ run to run; the assertions below check the real,
+// spec-critical outcomes (never HIGH RISK for a correct change; always
+// HIGH RISK for one with real defects), not incidental wording from a
+// single capture. Rendering both through the real PRDetail component
+// tree closes the loop between "the engine classifies structured data
+// correctly" (reviewIntelligence.test.js) and "the full page renders
+// that classification correctly with real API data."
 function renderPR(response, prNumber) {
   authApi.fetchPullRequestDetail.mockResolvedValue({
     number: prNumber, title: "Treat history.high_recent_churn as risk-bearing", author_login: "Saaransh27",
@@ -53,7 +52,7 @@ describe("PRDetail review intelligence — real captured PR #2 (correct)", () =>
       expect(screen.queryByText("SAFE TO REVIEW") || screen.queryByText("REVIEWER ATTENTION")).toBeTruthy()
     );
     expect(screen.queryByText("HIGH RISK")).not.toBeInTheDocument();
-    expect(screen.getByText("0 Confirmed")).toBeInTheDocument();
+    expect(screen.getByText("No confirmed defects in this change.")).toBeInTheDocument();
   });
 });
 
@@ -71,12 +70,17 @@ describe("PRDetail review intelligence — real captured PR #3 (defective, ident
     expect(screen.getAllByText((_, node) => node?.textContent?.includes("history.high_recent_curn")).length).toBeGreaterThan(0);
   });
 
-  it("surfaces the tier-ordering regression as a behavioral blind spot", async () => {
+  it("surfaces the tier-ordering regression in Confirmed Issues and flags reviewTiers.js in Risk Hotspots", async () => {
     renderPR(pr3Response, 3);
 
-    await waitFor(() =>
-      expect(screen.getByRole("heading", { name: "What We Could Not Verify" })).toBeInTheDocument()
-    );
-    expect(screen.queryByText(/Nothing here requires separate reviewer confirmation/)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Confirmed issues" })).toBeInTheDocument());
+    expect(
+      screen.getAllByText((_, node) => node?.textContent?.toLowerCase().includes("precedence")).length
+    ).toBeGreaterThan(0);
+
+    const row = screen.getAllByText("reviewTiers.js")
+      .map((el) => el.closest(".file-table-row"))
+      .find(Boolean);
+    expect(row.textContent).toMatch(/High|Critical/);
   });
 });

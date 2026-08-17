@@ -1,23 +1,13 @@
 import { Link } from "react-router-dom";
 import EmptyState from "../components/EmptyState";
 import { loginUrl } from "../lib/authApi";
-import { buildFindings, deriveVerdict, SAFE_TO_REVIEW, REVIEWER_ATTENTION, HIGH_RISK } from "../lib/reviewIntelligence";
+import { SAFE_TO_REVIEW, REVIEWER_ATTENTION, HIGH_RISK } from "../lib/reviewIntelligence";
+import { riskStatusFor } from "../lib/prStatus";
 
-const NOT_REVIEWED = "Not reviewed";
-
-// Milestone 7 (Part 17): risk status is only ever computed from a review
-// that actually exists in this session's cache -- never fabricated for a
-// PR nobody has reviewed yet. Files/lines changed likewise only show for
-// an already-reviewed PR (the real numbers come from that review's own
-// review_context/observations); GitHub's list endpoint itself still never
-// returns them (unchanged, deliberate, since Milestone 4 -- see below).
-function riskStatusFor(cached) {
-  if (!cached?.review?.parsed) return { label: NOT_REVIEWED, level: null };
-  const findings = buildFindings(cached.structured_findings?.findings);
-  const verdict = deriveVerdict(findings, cached.structured_findings?.state ?? "unavailable");
-  return { label: verdict.level, level: verdict.level };
-}
-
+// Files/lines changed only show for an already-reviewed PR (the real
+// numbers come from that review's own review_context/observations);
+// GitHub's list endpoint itself still never returns them (unchanged,
+// deliberate, since Milestone 4 -- see below).
 function RiskBadge({ status }) {
   const className =
     status.level === HIGH_RISK

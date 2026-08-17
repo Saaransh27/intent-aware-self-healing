@@ -6,7 +6,7 @@ const MAX_QUESTIONS = 5;
 // capped at 5 (the model already orders these; taking the first 5 keeps
 // the real ones, not a random subset). If there are more, the count is
 // disclosed rather than silently dropped.
-function OpenQuestions({ rawText }) {
+function OpenQuestions({ rawText, showTitle = true }) {
   if (!rawText || !rawText.trim()) return null;
 
   const rows = parseTitledListItems(rawText);
@@ -17,7 +17,7 @@ function OpenQuestions({ rawText }) {
 
   return (
     <section className="open-questions">
-      <h2 className="section-heading">Open Questions</h2>
+      {showTitle && <h2 className="section-heading">Open Questions</h2>}
       <ul className="question-list">
         {shown.map((row, index) => (
           <li className="question-item" key={index}>

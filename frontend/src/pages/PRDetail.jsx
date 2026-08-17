@@ -1,20 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchPullRequestDetail, loginUrl } from "../lib/authApi";
 import { fetchPRReview } from "../lib/api";
-import { buildFindings, deriveVerdict, deriveIntentVsImplementation, deriveBlindSpots } from "../lib/reviewIntelligence";
+import { buildFindings, deriveVerdict, deriveIntentVsImplementation } from "../lib/reviewIntelligence";
 import PRHeader from "../components/PRHeader";
 import PRNavigation from "../components/PRNavigation";
 import ReviewLoadingState from "../components/ReviewLoadingState";
 import EmptyState from "../components/EmptyState";
 import ReviewVerdict from "../components/ReviewVerdict";
-import ReviewAtAGlance from "../components/ReviewAtAGlance";
+import ReviewerAction from "../components/ReviewerAction";
 import StaleReviewBanner from "../components/StaleReviewBanner";
 import CommitStats from "../components/CommitStats";
-import IntentVsImplementation from "../components/IntentVsImplementation";
 import ReviewFindings from "../components/ReviewFindings";
-import WhatChanged from "../components/WhatChanged";
-import BlindSpots from "../components/BlindSpots";
+import IntentVsImplementation from "../components/IntentVsImplementation";
 import TestSignal from "../components/TestSignal";
+import ChangeStory from "../components/ChangeStory";
 import FileOverview from "../components/FileOverview";
 import SupportingDetails from "../components/SupportingDetails";
 
@@ -23,18 +22,26 @@ import SupportingDetails from "../components/SupportingDetails";
 // for PRHeader) and the review itself (slow — a real clone + LLM call).
 // The header doesn't wait on the review to render.
 //
-// Milestone 8, Part B: information architecture redesigned around the
-// backend's own structured findings (Milestone 7's order is superseded
-// here) — PR Header, Review Status (compact, dominant), Review at a
-// Glance (jump links), Intent vs Implementation, Findings (primary
-// content, filterable), What Changed (deterministic directory
-// walkthrough), Risk Hotspots (renamed File Overview), What We Could Not
-// Verify (renamed Blind Spots, honest non-bug language), Test Impact
-// (renamed Test Signal, explicit pass≠safety framing), Supporting Details
-// (collapsed, unchanged). findings/verdict/intentVsImplementation/
-// blindSpots are all derived once per render from the real response (see
-// lib/reviewIntelligence.js) and threaded to every component that needs
-// them, rather than each component re-parsing the raw data itself.
+// Milestone 9 (UI/UX refinement): information architecture redesigned
+// again around the fixed 10-section order this milestone specified — PR
+// Header, Review Verdict (compact, dominant), Reviewer Action (a real
+// checklist), Confirmed Issues, Open Questions (ReviewFindings renders
+// both, strictly split by confidence tier so a finding never appears in
+// both), Intent → Implementation → Test (a visual flow, one of this
+// product's core differentiators), Test Impact, Change Story (renamed
+// from What Changed, per-file purpose instead of directory grouping),
+// Risk Hotspots (renamed File Overview, its per-file attribution bug
+// fixed), Supporting Details (collapsed, gained a Raw Evidence item).
+// Milestone 8's "Review at a Glance" jump-strip and "What We Could Not
+// Verify" section are retired here -- the former is now redundant with
+// the more prominent Review Verdict/Reviewer Action, and the latter's
+// content is exactly what "Open Questions" (non-confirmed findings) now
+// covers; the underlying analysis functions in lib/reviewIntelligence.js
+// (deriveBlindSpots, isBehavioralChange, etc.) are untouched, only their
+// dedicated page section is gone. findings/verdict/intentVsImplementation
+// are all derived once per render from the real response and threaded to
+// every component that needs them, rather than each component
+// re-parsing the raw data itself.
 //
 // Fix pass (precision re-review): ExecutiveSummary was originally still
 // rendered here too, directly under ReviewVerdict -- its own content
@@ -42,12 +49,12 @@ import SupportingDetails from "../components/SupportingDetails";
 // duplicated by ReviewVerdict (verdict), the now-fixed FileOverview (real
 // risk-sorted files), and SupportingDetails' own "What changed and why"
 // accordion item -- exactly the redundant-card clutter the spec warned
-// against, and not one of the 10 named sections. Removed here only;
-// ExecutiveSummary.jsx itself is untouched and still used by the legacy
-// commit-review flow. CommitStats stays, positioned before Review
-// Verdict -- it is purely objective per-commit metadata (files/lines/
-// tests changed), not an assessment, so it reads as an extension of the
-// header rather than a competing verdict-like section.
+// against. Removed here only; ExecutiveSummary.jsx itself is untouched
+// and still used by the legacy commit-review flow. CommitStats stays,
+// positioned before Review Verdict -- it is purely objective per-commit
+// metadata (files/lines/tests changed), not an assessment, so it reads
+// as an extension of the header rather than a competing verdict-like
+// section.
 function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
   const [prDetail, setPrDetail] = useState(null);
   const [detailError, setDetailError] = useState(null);
@@ -152,12 +159,6 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
     () => deriveIntentVsImplementation(claimedIntent, findings),
     [claimedIntent, findings]
   );
-  const blindSpots = useMemo(() => deriveBlindSpots(findings), [findings]);
-  const riskHotspotFileCount = useMemo(
-    () => new Set(findings.flatMap((f) => f.affectedFiles)).size,
-    [findings]
-  );
-  const touchesTests = !!observations?.change_categories?.touches_tests;
 
   return (
     <div className="pr-detail-page">
@@ -194,14 +195,15 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
             onReviewAgain={handleReviewAgain}
           />
           <CommitStats reviewContext={reviewContext} observations={observations} />
+
+          {/* 2. Review Verdict */}
           <ReviewVerdict verdict={verdict} findings={findings} />
-          <ReviewAtAGlance
-            findings={findings}
-            blindSpotsCount={blindSpots.length}
-            riskHotspotFileCount={riskHotspotFileCount}
-            touchesTests={touchesTests}
-          />
-          <IntentVsImplementation intentVsImplementation={intentVsImplementation} />
+
+          {/* 3. Reviewer Action */}
+          <ReviewerAction findings={findings} />
+
+          {/* 4/5. Confirmed Issues + Open Questions (one component,
+              strictly split by confidence tier -- see ReviewFindings.jsx) */}
           <ReviewFindings
             rawText={sections.what_deserves_attention_ranked}
             findings={findings}
@@ -210,7 +212,21 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
             onSelectFile={setSelectedFile}
             reviewContext={reviewContext}
           />
-          <WhatChanged reviewContext={reviewContext} observations={observations} findings={findings} />
+
+          {/* 6. Intent -> Implementation -> Test */}
+          <IntentVsImplementation intentVsImplementation={intentVsImplementation} />
+
+          {/* 7. Test Impact */}
+          <TestSignal
+            observations={observations}
+            findings={findings}
+            intentVsImplementation={intentVsImplementation}
+          />
+
+          {/* 8. Change Story */}
+          <ChangeStory reviewContext={reviewContext} observations={observations} findings={findings} />
+
+          {/* 9. Risk Hotspots */}
           <FileOverview
             reviewContext={reviewContext}
             observations={observations}
@@ -221,13 +237,14 @@ function PRDetail({ owner, repo, prNumber, pullRequests, reviewCache }) {
             repo={repo}
             headSha={reviewData.head_sha}
           />
-          <BlindSpots blindSpots={blindSpots} />
-          <TestSignal
+
+          {/* 10. Supporting Details */}
+          <SupportingDetails
+            sections={sections}
+            reviewContext={reviewContext}
             observations={observations}
-            findings={findings}
-            intentVsImplementation={intentVsImplementation}
+            structuredFindings={structuredFindings}
           />
-          <SupportingDetails sections={sections} reviewContext={reviewContext} observations={observations} />
         </>
       )}
 

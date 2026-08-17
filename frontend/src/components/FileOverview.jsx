@@ -4,6 +4,7 @@ import { whyItMatters } from "../lib/reviewTiers";
 import { claimLabel, isRiskBearingClaim } from "../lib/claimVocabulary";
 import {
   attributeFindingsToFiles,
+  findingsForFile,
   fileSeverity,
   FILE_RISK_ROUTINE,
   SEVERITY_CRITICAL,
@@ -17,17 +18,6 @@ function splitPath(path) {
   const lastSlash = path.lastIndexOf("/");
   if (lastSlash === -1) return { dir: "", base: path };
   return { dir: path.slice(0, lastSlash + 1), base: path.slice(lastSlash + 1) };
-}
-
-// The finding (if any) actually attributed to this file, highest severity
-// first -- used so "Why it matters" reflects the SAME reason the Risk
-// column escalated, rather than silently disagreeing with it.
-function topAttributedFinding(filePath, findings, severityByPath) {
-  if (!severityByPath.has(filePath)) return null;
-  const targetSeverity = severityByPath.get(filePath);
-  return findings.find(
-    (f) => f.severity === targetSeverity && (f.affectedFiles.includes(filePath) || f.evidence.length > 0)
-  ) || null;
 }
 
 // Answers "where should I look?" as a compact, sorted table — the real
@@ -80,9 +70,11 @@ function FileOverview({ reviewContext, observations, findings, selectedFile, onS
           const isSelected = selectedFile === file.path;
           const { dir, base } = splitPath(file.path);
           const riskClaims = file.claims.filter(isRiskBearingClaim);
-          const attributedFinding = topAttributedFinding(file.path, findings || [], severityByPath);
+          const attributedFinding = findingsForFile(file.path, findings || [])[0] || null;
           const whyText = attributedFinding
-            ? attributedFinding.title || attributedFinding.explanation
+            ? attributedFinding.whyItMatters
+              ? `${attributedFinding.title} — ${attributedFinding.whyItMatters}`
+              : attributedFinding.title
             : whyItMatters(file.path, reviewContext);
           const githubUrl = owner && repo && headSha
             ? `https://github.com/${owner}/${repo}/blob/${headSha}/${file.path}`

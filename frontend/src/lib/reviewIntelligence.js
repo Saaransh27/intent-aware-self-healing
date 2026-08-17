@@ -195,6 +195,10 @@ export function deriveVerdict(findings, structuredState) {
   };
 }
 
+function pathsMatch(filePath, rawPath) {
+  return filePath === rawPath || filePath.endsWith("/" + rawPath) || filePath.endsWith(rawPath);
+}
+
 // Part 13: attributes each finding's severity to the real file(s) it's
 // actually about, now read directly from the finding's own "affectedFiles"
 // field -- the model states this explicitly per the section-3 contract,
@@ -204,9 +208,7 @@ export function attributeFindingsToFiles(findings, changedFilePaths) {
   const severityByPath = new Map();
   for (const finding of findings) {
     for (const rawPath of finding.affectedFiles) {
-      const matchingPath = changedFilePaths.find(
-        (path) => path === rawPath || path.endsWith("/" + rawPath) || path.endsWith(rawPath)
-      );
+      const matchingPath = changedFilePaths.find((path) => pathsMatch(path, rawPath));
       if (!matchingPath) continue;
       const current = severityByPath.get(matchingPath) || SEVERITY_LOW;
       if (SEVERITY_RANK[finding.severity] > SEVERITY_RANK[current]) {
@@ -215,6 +217,21 @@ export function attributeFindingsToFiles(findings, changedFilePaths) {
     }
   }
   return severityByPath;
+}
+
+// Milestone 9: the real finding(s) a specific file's own "affectedFiles"
+// field actually names -- strictly, never a fallback to "this finding
+// merely has some evidence." A real, disclosed gap this replaces: the
+// prior version fell back to any finding with a non-empty evidence array
+// when nothing named the file directly, which could attribute a file's
+// "why it matters" text to an unrelated finding whenever an earlier,
+// higher-severity finding happened to be the first one carrying any
+// evidence at all. Sorted highest severity first so callers that want
+// only the single most relevant finding can take the first element.
+export function findingsForFile(filePath, findings) {
+  return findings
+    .filter((f) => f.affectedFiles.some((rawPath) => pathsMatch(filePath, rawPath)))
+    .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity]);
 }
 
 // Reconciles the two risk signals this product computes for a file, so

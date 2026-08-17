@@ -5,6 +5,7 @@ import {
   deriveIntentVsImplementation,
   deriveBlindSpots,
   attributeFindingsToFiles,
+  findingsForFile,
   fileSeverity,
   SAFE_TO_REVIEW,
   REVIEWER_ATTENTION,
@@ -220,5 +221,39 @@ describe("Milestone 8 — Part 9 robustness: mismatch-shaped finding with no tes
     expect(result.consistency).toBe("MISMATCH");
     expect(result.testDetail).toEqual([]);
     expect(result.implementationDetail).toEqual(expect.arrayContaining(["FOO_BAR", "FOO_BARR"]));
+  });
+});
+
+describe("Milestone 9 — Risk Hotspots attribution: a file's reason must be its own, never borrowed", () => {
+  // Real gap found and reported this milestone: the prior attribution
+  // fell back to "any finding with some evidence" when nothing named the
+  // target file directly, which could attribute an unrelated file's
+  // "why it matters" text to the first finding that happened to carry any
+  // evidence at all. findingsForFile now requires the finding to actually
+  // name the file in its own "affectedFiles" -- no fallback.
+  const otherFileFinding = finding({
+    title: "Unrelated finding about another file",
+    severity: "High",
+    affectedFiles: ["src/other.js"],
+    evidence: ["some evidence, but not about src/a.js"],
+  });
+  const targetFileFinding = finding({
+    title: "The real reason src/a.js is flagged",
+    severity: "High",
+    affectedFiles: ["src/a.js"],
+    evidence: [],
+  });
+  const findings = buildFindings([otherFileFinding, targetFileFinding]);
+
+  it("never attributes a finding to a file it doesn't actually name, even when an earlier finding has evidence", () => {
+    const matches = findingsForFile("src/a.js", findings);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].title).toBe("The real reason src/a.js is flagged");
+  });
+
+  it("never returns the unrelated file's own finding for its own path either", () => {
+    const matches = findingsForFile("src/other.js", findings);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].title).toBe("Unrelated finding about another file");
   });
 });
