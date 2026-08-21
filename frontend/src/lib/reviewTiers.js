@@ -61,9 +61,11 @@ export const FINDING_TIER_RULE =
 export function findingTier(mentionedFiles, reviewContext) {
   const riskBearing = riskBearingFilePaths(reviewContext);
   const changedFiles = new Set(reviewContext?.commit_summary?.changed_files || []);
+  const mentionedChangedFiles = mentionedFiles.filter((f) => changedFiles.has(f));
 
   if (mentionedFiles.some((f) => riskBearing.has(f))) return CRITICAL;
-  if (mentionedFiles.some((f) => changedFiles.has(f))) return MEDIUM;
+  if (mentionedChangedFiles.length > 1) return CRITICAL;
+  if (mentionedChangedFiles.length > 0) return MEDIUM;
   return LOW;
 }
 
