@@ -38,6 +38,10 @@ describe("isRiskBearingClaim", () => {
     expect(isRiskBearingClaim(claim("historical_risk", "history.first_author_touch"))).toBe(true);
   });
 
+  it("treats history.high_recent_churn as risk-bearing (5+ changes in 30 days is a real signal worth surfacing)", () => {
+    expect(isRiskBearingClaim(claim("historical_risk", "history.high_recent_churn"))).toBe(true);
+  });
+
   it("does not treat an ordinary history claim like history.rapid_iteration as risk-bearing", () => {
     expect(isRiskBearingClaim(claim("historical_risk", "history.rapid_iteration"))).toBe(false);
   });

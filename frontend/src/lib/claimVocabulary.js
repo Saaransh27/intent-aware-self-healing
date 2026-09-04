@@ -219,6 +219,7 @@ const RISK_BEARING_CLAIM_IDS = new Set([
   "verification.public_change_without_tests",
   "history.first_author_touch",
   "history.hot_file",
+  "history.high_recent_curn",
   "reach.expected_co_change_partner_missing",
 ]);
 
